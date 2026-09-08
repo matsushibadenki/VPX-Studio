@@ -1,0 +1,61 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+# Xcode user data and build products
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# CocoaPods and Carthage generated dependencies
+Pods/
+Carthage/Build/
+
+# Fastlane and test output
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+*.xcresult
+
+# macOS and editor metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+*.swp
+*.swo
+*~
+.vscode/
+
+# Local configuration, certificates, and signing material
+.env
+.env.*
+!.env.example
+*.mobileprovision
+*.p12
+*.cer
+*.pem
+*.key
+
+# Local captures, recordings, and performance traces
+Captures/
+Recordings/
+Logs/
+*.metal-capture
+*.trace
+
+# private docs
+docs-private/
