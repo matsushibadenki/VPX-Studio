@@ -1,0 +1,3 @@
+module VPXStudioPackageTests {
+    header "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/include/VPXStudioPackageTests-Swift.h"
+}

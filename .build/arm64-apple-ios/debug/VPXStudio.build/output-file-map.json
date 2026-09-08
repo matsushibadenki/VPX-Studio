@@ -1,0 +1,124 @@
+{
+  "": {
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/primary.swiftdeps"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceContracts.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceContracts.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceContracts~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceContracts.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceContracts.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceRegistry.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceRegistry.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceRegistry.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceRegistry~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceRegistry.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceRegistry.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/ProjectConfiguration.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/ProjectConfiguration.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/ProjectConfiguration.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/ProjectConfiguration~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/ProjectConfiguration.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/ProjectConfiguration.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/StudioModel.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioModel.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioModel.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioModel.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioModel.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Localization/LocalizationStore.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LocalizationStore.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LocalizationStore.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LocalizationStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LocalizationStore.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LocalizationStore.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/FrameGraph.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/FrameGraph.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/FrameGraph.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/FrameGraph~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/FrameGraph.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/FrameGraph.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/LatestVideoFrameStore.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LatestVideoFrameStore.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LatestVideoFrameStore.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LatestVideoFrameStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LatestVideoFrameStore.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/LatestVideoFrameStore.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeCore.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeCore.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeCore.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeCore~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeCore.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeCore.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeMetricsStore.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeMetricsStore.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeMetricsStore.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeMetricsStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeMetricsStore.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/RealtimeMetricsStore.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalPreviewView.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalPreviewView.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalPreviewView.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalPreviewView~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalPreviewView.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalPreviewView.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalRenderer.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalRenderer.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalRenderer.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalRenderer~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalRenderer.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MetalRenderer.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/StudioView.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioView.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioView.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioView~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioView.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/StudioView.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/VPXStudioApp.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/VPXStudioApp.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/VPXStudioApp.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/VPXStudioApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/VPXStudioApp.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/VPXStudioApp.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DerivedSources/resource_bundle_accessor.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/resource_bundle_accessor.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/resource_bundle_accessor.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/resource_bundle_accessor~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/resource_bundle_accessor.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/resource_bundle_accessor.dia"
+  }
+}

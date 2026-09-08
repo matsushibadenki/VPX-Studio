@@ -1,0 +1,1406 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.xctest/Contents/MacOS/VPXStudioPackageTests",
+      "packagePath" : "/Users/Shared/Program/Xcode/VPX-Studio",
+      "productName" : "VPXStudioPackageTests"
+    }
+  ],
+  "copyCommands" : {
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio_VPXStudio.bundle/LocalizationCatalog.json" : {
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Resources/LocalizationCatalog.json"
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio_VPXStudio.bundle/LocalizationCatalog.json"
+        }
+      ]
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio_VPXStudio.bundle/PreviewShaders.metal" : {
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Resources/PreviewShaders.metal"
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio_VPXStudio.bundle/PreviewShaders.metal"
+        }
+      ]
+    }
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.VPXCaptureProtocol-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/sources",
+      "importPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VPXCaptureProtocol",
+      "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXCaptureProtocol.swiftmodule",
+      "objects" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx15.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/include/VPXCaptureProtocol-Swift.h",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vpx_studio"
+      ],
+      "outputFileMapPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXCaptureProtocol.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift"
+      ],
+      "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.VPXIPhoneCapture-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/sources",
+      "importPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXCaptureProtocol.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VPXIPhoneCapture",
+      "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXIPhoneCapture.swiftmodule",
+      "objects" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx15.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/include/VPXIPhoneCapture-Swift.h",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vpx_studio"
+      ],
+      "outputFileMapPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXIPhoneCapture.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift"
+      ],
+      "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.VPXStudio-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/sources",
+      "importPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceRegistry.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/ProjectConfiguration.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/StudioModel.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Localization/LocalizationStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/FrameGraph.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/LatestVideoFrameStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeCore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeMetricsStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalPreviewView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalRenderer.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/StudioView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/VPXStudioApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DerivedSources/resource_bundle_accessor.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<VPXStudio-arm64-apple-macosx-debug.module-resources>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXCaptureProtocol.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "VPXStudio",
+      "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudio.swiftmodule",
+      "objects" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MacCameraVideoSource.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/AppSettings.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/CameraRig.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceContracts.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceRegistry.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/ProjectConfiguration.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioModel.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LocalizationStore.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/FrameGraph.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LatestVideoFrameStore.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeCore.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeMetricsStore.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalPreviewView.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalRenderer.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioView.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/VPXStudioApp.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/resource_bundle_accessor.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx15.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+        "-module-cache-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "VPXStudio_main",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vpx_studio"
+      ],
+      "outputFileMapPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MacCameraVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/AppSettings.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/CameraRig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceContracts.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceRegistry.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/ProjectConfiguration.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioModel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LocalizationStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/FrameGraph.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LatestVideoFrameStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeCore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeMetricsStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalPreviewView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalRenderer.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/VPXStudioApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/resource_bundle_accessor.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudio.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceRegistry.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/ProjectConfiguration.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/StudioModel.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Localization/LocalizationStore.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/FrameGraph.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/LatestVideoFrameStore.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeCore.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeMetricsStore.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalPreviewView.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalRenderer.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/StudioView.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/VPXStudioApp.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DerivedSources/resource_bundle_accessor.swift"
+      ],
+      "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.VPXStudioPackageTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/sources",
+      "importPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudioTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VPXStudioPackageTests",
+      "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudioPackageTests.swiftmodule",
+      "objects" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx15.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/include/VPXStudioPackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vpx_studio"
+      ],
+      "outputFileMapPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudioPackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.VPXStudioTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/sources",
+      "importPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/CaptureNodeProtocolTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/FrameGraphTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXCaptureProtocol.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VPXStudioTests",
+      "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudioTests.swiftmodule",
+      "objects" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx15.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vpx_studio"
+      ],
+      "outputFileMapPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules/VPXStudioTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/CaptureNodeProtocolTests.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/FrameGraphTests.swift"
+      ],
+      "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "VPXCaptureProtocol" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VPXCaptureProtocol",
+      "-package-name",
+      "vpx_studio",
+      "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift",
+      "-I",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx15.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/include/VPXCaptureProtocol-Swift.h",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vpx_studio",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "VPXIPhoneCapture" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VPXIPhoneCapture",
+      "-package-name",
+      "vpx_studio",
+      "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift",
+      "-I",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx15.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/include/VPXIPhoneCapture-Swift.h",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vpx_studio",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "VPXStudio" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VPXStudio",
+      "-package-name",
+      "vpx_studio",
+      "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceRegistry.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/ProjectConfiguration.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/StudioModel.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Localization/LocalizationStore.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/FrameGraph.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/LatestVideoFrameStore.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeCore.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeMetricsStore.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalPreviewView.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalRenderer.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/StudioView.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/VPXStudioApp.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DerivedSources/resource_bundle_accessor.swift",
+      "-I",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx15.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+      "-module-cache-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "VPXStudio_main",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vpx_studio",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "VPXStudioPackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VPXStudioPackageTests",
+      "-package-name",
+      "vpx_studio",
+      "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.derived/runner.swift",
+      "-I",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx15.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/include/VPXStudioPackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vpx_studio",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "VPXStudioTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VPXStudioTests",
+      "-package-name",
+      "vpx_studio",
+      "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/CaptureNodeProtocolTests.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/FrameGraphTests.swift",
+      "-I",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx15.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vpx_studio",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "VPXCaptureProtocol" : [
+
+    ],
+    "VPXIPhoneCapture" : [
+      "VPXCaptureProtocol"
+    ],
+    "VPXStudio" : [
+      "VPXCaptureProtocol"
+    ],
+    "VPXStudioPackageTests" : [
+      "VPXStudioTests",
+      "VPXStudio",
+      "VPXCaptureProtocol"
+    ],
+    "VPXStudioTests" : [
+      "VPXStudio",
+      "VPXCaptureProtocol"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/sources"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/sources"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio-entitlement.plist"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceRegistry.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/ProjectConfiguration.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/StudioModel.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Localization/LocalizationStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/FrameGraph.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/LatestVideoFrameStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeCore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeMetricsStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalPreviewView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalRenderer.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/StudioView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/VPXStudioApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DerivedSources/resource_bundle_accessor.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/sources"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/AppSettings.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/CameraRig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceContracts.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceRegistry.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/FrameGraph.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LatestVideoFrameStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LocalizationStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MacCameraVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalPreviewView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalRenderer.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/ProjectConfiguration.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeCore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeMetricsStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioModel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/VPXStudioApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/resource_bundle_accessor.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.product/Objects.LinkFileList"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/sources"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/AppSettings.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/CameraRig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceContracts.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DeviceRegistry.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/FrameGraph.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LatestVideoFrameStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/LocalizationStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MacCameraVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalPreviewView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/MetalRenderer.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/ProjectConfiguration.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeCore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/RealtimeMetricsStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioModel.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/StudioView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/VPXStudioApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/resource_bundle_accessor.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioPackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/CaptureNodeProtocolTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/FrameGraphTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/sources"
+    },
+    "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

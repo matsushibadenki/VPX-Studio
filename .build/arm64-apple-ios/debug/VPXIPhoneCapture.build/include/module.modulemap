@@ -1,0 +1,3 @@
+module VPXIPhoneCapture {
+    header "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/include/VPXIPhoneCapture-Swift.h"
+}

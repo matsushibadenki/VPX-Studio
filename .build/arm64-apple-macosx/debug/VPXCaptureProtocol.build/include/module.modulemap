@@ -1,0 +1,3 @@
+module VPXCaptureProtocol {
+    header "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXCaptureProtocol.build/include/VPXCaptureProtocol-Swift.h"
+}

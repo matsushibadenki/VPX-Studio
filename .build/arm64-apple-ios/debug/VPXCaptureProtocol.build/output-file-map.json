@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/primary.swiftdeps"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages.dia"
+  }
+}

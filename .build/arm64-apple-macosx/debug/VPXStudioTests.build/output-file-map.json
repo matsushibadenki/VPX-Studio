@@ -1,0 +1,19 @@
+{
+  "": {
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/primary.swiftdeps"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/CaptureNodeProtocolTests.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/CaptureNodeProtocolTests.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Tests/VPXStudioTests/FrameGraphTests.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudioTests.build/FrameGraphTests.dia"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/primary.swiftdeps"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.dia"
+  }
+}

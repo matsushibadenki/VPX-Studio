@@ -1,0 +1,17 @@
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceRegistry.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/ProjectConfiguration.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/StudioModel.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Localization/LocalizationStore.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/FrameGraph.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/LatestVideoFrameStore.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeCore.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Realtime/RealtimeMetricsStore.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalPreviewView.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Renderer/MetalRenderer.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/StudioView.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/VPXStudioApp.swift
+/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXStudio.build/DerivedSources/resource_bundle_accessor.swift

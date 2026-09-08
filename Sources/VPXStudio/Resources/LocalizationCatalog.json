@@ -1,0 +1,40 @@
+{
+  "languages": [
+    {
+      "id": "ja",
+      "name": "日本語",
+      "translations": {
+        "build": "構築", "calibrate": "校正", "rehearse": "リハーサル", "live": "ライブ", "record": "収録", "review": "レビュー",
+        "mode": "モード", "stop": "停止", "sources": "入力ソース", "iphoneCaptureNode": "iPhone Capture Node", "professionalVideoInput": "プロ映像入力", "externalTracking": "外部トラッキング",
+        "connectLocalCamera": "ローカルカメラに接続", "chromaKey": "クロマキー", "monitor": "モニター", "renderer": "レンダラー", "tracking": "トラッキング", "frameRate": "フレームレート", "latency": "レイテンシ", "gpuFrameTime": "GPUフレーム時間", "droppedFrames": "推定ドロップフレーム", "focalLength": "焦点距離", "inputColor": "入力カラー", "radialDistortion": "放射歪み K1", "videoProfile": "映像プロファイル", "stageSpace": "ステージ座標",
+        "ready": "準備完了", "recording": "収録中", "metalFrameGraph": "Metal Frame Graph", "greenThreshold": "緑のしきい値", "edgeSoftness": "エッジのソフトネス",
+        "language": "言語", "appearance": "表示モード", "system": "システム設定", "light": "ライト", "dark": "ダーク", "noInput": "入力なし", "noConnectedDevices": "接続中のデバイスはありません", "connecting": "接続中", "connected": "接続済み", "disconnected": "切断", "primaryCamera": "メインカメラ",
+        "preparingMetalRenderer": "Metalレンダラーを準備中", "metalPreviewActive": "Metalプレビューが有効", "previewStopped": "プレビューを停止", "cameraAccessNotGranted": "カメラへのアクセスが許可されていません", "liveCameraPreviewActive": "ライブカメラプレビューが有効"
+      }
+    },
+    {
+      "id": "en",
+      "name": "English",
+      "translations": {
+        "build": "Build", "calibrate": "Calibrate", "rehearse": "Rehearse", "live": "Live", "record": "Record", "review": "Review",
+        "mode": "Mode", "stop": "Stop", "sources": "Sources", "iphoneCaptureNode": "iPhone Capture Node", "professionalVideoInput": "Professional Video Input", "externalTracking": "External Tracking",
+        "connectLocalCamera": "Connect local camera", "chromaKey": "Chroma key", "monitor": "Monitor", "renderer": "Renderer", "tracking": "Tracking", "frameRate": "Frame rate", "latency": "Latency", "gpuFrameTime": "GPU frame time", "droppedFrames": "Estimated dropped frames", "focalLength": "Focal length", "inputColor": "Input color", "radialDistortion": "Radial distortion K1", "videoProfile": "Video profile", "stageSpace": "Stage space",
+        "ready": "Ready", "recording": "Recording", "metalFrameGraph": "Metal Frame Graph", "greenThreshold": "Green threshold", "edgeSoftness": "Edge softness",
+        "language": "Language", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark", "noInput": "No input", "noConnectedDevices": "No connected devices", "connecting": "Connecting", "connected": "Connected", "disconnected": "Disconnected", "primaryCamera": "Primary camera",
+        "preparingMetalRenderer": "Preparing Metal renderer", "metalPreviewActive": "Metal preview active", "previewStopped": "Preview stopped", "cameraAccessNotGranted": "Camera access was not granted", "liveCameraPreviewActive": "Live camera preview active"
+      }
+    },
+    {
+      "id": "zh-Hans",
+      "name": "简体中文",
+      "translations": {
+        "build": "构建", "calibrate": "校准", "rehearse": "排练", "live": "直播", "record": "录制", "review": "审阅",
+        "mode": "模式", "stop": "停止", "sources": "输入源", "iphoneCaptureNode": "iPhone采集节点", "professionalVideoInput": "专业视频输入", "externalTracking": "外部跟踪",
+        "connectLocalCamera": "连接本地相机", "chromaKey": "色度键控", "monitor": "监视器", "renderer": "渲染器", "tracking": "跟踪", "frameRate": "帧率", "latency": "延迟", "gpuFrameTime": "GPU帧时间", "droppedFrames": "估计丢帧", "focalLength": "焦距", "inputColor": "输入色彩", "radialDistortion": "径向畸变 K1", "videoProfile": "视频配置", "stageSpace": "舞台坐标",
+        "ready": "就绪", "recording": "录制中", "metalFrameGraph": "Metal帧图", "greenThreshold": "绿色阈值", "edgeSoftness": "边缘柔化",
+        "language": "语言", "appearance": "外观", "system": "跟随系统", "light": "浅色", "dark": "深色", "noInput": "无输入", "noConnectedDevices": "没有已连接的设备", "connecting": "正在连接", "connected": "已连接", "disconnected": "已断开", "primaryCamera": "主摄像机",
+        "preparingMetalRenderer": "正在准备Metal渲染器", "metalPreviewActive": "Metal预览已启用", "previewStopped": "预览已停止", "cameraAccessNotGranted": "未授予相机访问权限", "liveCameraPreviewActive": "实时相机预览已启用"
+      }
+    }
+  ]
+}
