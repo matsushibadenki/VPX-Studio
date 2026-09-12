@@ -4,6 +4,7 @@ struct StudioView: View {
     @Bindable var studio: StudioModel
     @Bindable var localization: LocalizationStore
     @Bindable var settings: AppSettings
+    @State private var showsCaptureNodePairing = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -78,6 +79,11 @@ struct StudioView: View {
                 studio.connectLocalCamera()
             }
             .buttonStyle(.bordered)
+            Button(localization.text(.startIPhonePairing)) {
+                studio.startCaptureNodeHost()
+                showsCaptureNodePairing = studio.activeCapturePairingCredential != nil
+            }
+            .buttonStyle(.bordered)
             Divider()
             if studio.deviceRegistry.devices.isEmpty {
                 Text(localization.text(.noConnectedDevices))
@@ -104,6 +110,15 @@ struct StudioView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(12)
+        .sheet(isPresented: $showsCaptureNodePairing) {
+            if let credential = studio.activeCapturePairingCredential {
+                CaptureNodePairingSheet(
+                    credential: credential,
+                    localization: localization,
+                    stop: studio.stopCaptureNodeHost
+                )
+            }
+        }
     }
 
     private var viewport: some View {

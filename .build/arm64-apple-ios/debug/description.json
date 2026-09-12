@@ -59,6 +59,18 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodePairing.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeTransportCodec.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureSecureChannel.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/swift-version--58304C5D6DBC2206.txt"
         },
         {
@@ -70,7 +82,10 @@
       "moduleName" : "VPXCaptureProtocol",
       "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/Modules/VPXCaptureProtocol.swiftmodule",
       "objects" : [
-        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o"
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeMessages.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodePairing.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeTransportCodec.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureSecureChannel.swift.o"
       ],
       "otherArguments" : [
         "-target",
@@ -129,12 +144,27 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodePairing.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeTransportCodec.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureSecureChannel.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/Modules/VPXCaptureProtocol.swiftmodule"
         }
       ],
       "prepareForIndexing" : false,
       "sources" : [
-        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift"
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodePairing.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeTransportCodec.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureSecureChannel.swift"
       ],
       "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build",
       "wholeModuleOptimization" : false
@@ -146,7 +176,23 @@
       "inputs" : [
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeControlView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeHostDiscovery.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CapturePairingCredentialStore.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneHEVCVideoEncoder.swift"
         },
         {
           "kind" : "file",
@@ -165,7 +211,11 @@
       "moduleName" : "VPXIPhoneCapture",
       "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/Modules/VPXIPhoneCapture.swiftmodule",
       "objects" : [
-        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o"
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/CaptureNodeControlView.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder.swift.o"
       ],
       "otherArguments" : [
         "-target",
@@ -220,7 +270,23 @@
       "outputs" : [
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/CaptureNodeControlView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder.swift.o"
         },
         {
           "kind" : "file",
@@ -229,7 +295,11 @@
       ],
       "prepareForIndexing" : false,
       "sources" : [
-        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift"
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeControlView.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeHostDiscovery.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CapturePairingCredentialStore.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneHEVCVideoEncoder.swift"
       ],
       "tempsPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build",
       "wholeModuleOptimization" : false
@@ -241,7 +311,23 @@
       "inputs" : [
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeBonjourHost.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeHEVCVideoSource.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodePairingSheet.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacHEVCVideoDecoder.swift"
         },
         {
           "kind" : "file",
@@ -328,7 +414,11 @@
       "moduleName" : "VPXStudio",
       "moduleOutputPath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/Modules/VPXStudio.swiftmodule",
       "objects" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.swift.o",
         "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swift.o",
+        "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.swift.o",
         "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.swift.o",
         "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.swift.o",
         "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/DeviceContracts.swift.o",
@@ -399,7 +489,23 @@
       "outputs" : [
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.swift.o"
         },
         {
           "kind" : "file",
@@ -472,7 +578,11 @@
       ],
       "prepareForIndexing" : false,
       "sources" : [
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeBonjourHost.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeHEVCVideoSource.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodePairingSheet.swift",
         "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift",
+        "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacHEVCVideoDecoder.swift",
         "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift",
         "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift",
         "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift",
@@ -709,6 +819,9 @@
       "vpx_studio",
       "-c",
       "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodePairing.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeTransportCodec.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureSecureChannel.swift",
       "-I",
       "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/Modules",
       "-target",
@@ -768,7 +881,11 @@
       "-package-name",
       "vpx_studio",
       "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeControlView.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeHostDiscovery.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CapturePairingCredentialStore.swift",
       "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneHEVCVideoEncoder.swift",
       "-I",
       "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/Modules",
       "-target",
@@ -828,7 +945,11 @@
       "-package-name",
       "vpx_studio",
       "-c",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeBonjourHost.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeHEVCVideoSource.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodePairingSheet.swift",
       "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift",
+      "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacHEVCVideoDecoder.swift",
       "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift",
       "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift",
       "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift",
@@ -1070,6 +1191,18 @@
         {
           "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeMessages.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodePairing.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureNodeTransportCodec.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXCaptureProtocol/CaptureSecureChannel.swift"
         }
       ],
       "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/sources"
@@ -1083,7 +1216,23 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeControlView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeHostDiscovery.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CapturePairingCredentialStore.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneHEVCVideoEncoder.swift"
         }
       ],
       "outputFilePath" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXIPhoneCapture.build/sources"
@@ -1097,7 +1246,23 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeBonjourHost.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeHEVCVideoSource.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodePairingSheet.swift"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacHEVCVideoDecoder.swift"
         },
         {
           "kind" : "file",
@@ -1179,11 +1344,35 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodePairing.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeTransportCodec.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureSecureChannel.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.swift.o"
         },
         {
           "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.swift.o"
         },
         {
           "kind" : "file",
@@ -1208,6 +1397,10 @@
         {
           "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.swift.o"
         },
         {
           "kind" : "file",
@@ -1275,11 +1468,35 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodePairing.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureNodeTransportCodec.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXCaptureProtocol.build/CaptureSecureChannel.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.swift.o"
         },
         {
           "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CameraRig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.swift.o"
         },
         {
           "kind" : "file",
@@ -1304,6 +1521,10 @@
         {
           "kind" : "file",
           "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.swift.o"
         },
         {
           "kind" : "file",

@@ -369,8 +369,7 @@ extern "C" {
 #if defined(__OBJC__)
 
 /// Captures video, ARKit tracking, and LiDAR depth from one ARSession.
-/// Encoding and network transport intentionally remain outside this type so the
-/// app can select an HEVC encoder and transport policy per production profile.
+/// HEVC encoding is optional and network transport remains outside this type.
 SWIFT_CLASS("_TtC16VPXIPhoneCapture24IPhoneCaptureCoordinator")
 @interface IPhoneCaptureCoordinator : NSObject
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;

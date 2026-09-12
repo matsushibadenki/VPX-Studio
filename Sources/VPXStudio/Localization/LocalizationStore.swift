@@ -7,6 +7,7 @@ enum LocalizationKey: String {
     case connectLocalCamera, chromaKey, monitor, renderer, tracking, frameRate, latency, gpuFrameTime, droppedFrames, focalLength, inputColor, radialDistortion, videoProfile, stageSpace
     case ready, recording, metalFrameGraph, greenThreshold, edgeSoftness
     case language, appearance, system, light, dark, noInput, noConnectedDevices, connecting, connected, disconnected, primaryCamera
+    case startIPhonePairing, pairIPhone, scanQRCode, verificationCode, pairingInstructions, stopPairing
     case preparingMetalRenderer, metalPreviewActive, previewStopped, cameraAccessNotGranted, liveCameraPreviewActive
 }
 

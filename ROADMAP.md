@@ -17,6 +17,12 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 - [Done] 信頼性ストリームの分割・結合を復元する長さプレフィックス付き制御メッセージ codec を追加。
 - [Done] 4タイムスタンプ交換からMac／iPhone間のクロック差とRTTを推定する共有ロジックを追加。
 - [Done] HEVC映像プロファイル、映像開始／停止、品質変更、キーフレーム要求を表す冪等な制御契約を追加。
+- [Done] iPhoneのVideoToolbox HEVCエンコードと、MacのVideoToolboxデコードからRealtimeCoreへ渡す入力アダプタを追加。
+- [Done] QR引き渡し用256-bit資格情報、確認コード、AES-GCM制御メッセージ保護を共有プロトコルへ追加。
+- [Done] AES-GCMで保護したバイナリHEVC／制御パケット、TCP分割受信の復元、Bonjour広告するMac Hostを追加。
+- [Done] ペアリング済みHelloを受けたMac HostがDevice RegistryへNodeを登録し、HEVC映像をRealtimeCoreへ投入する経路を追加。
+- [Done] iPhone Capture Nodeの3言語UIコンポーネントに、Host探索、QR読取、確認コード、接続、映像開始／停止を追加。
+- [Done] iPhone側Bonjour探索、QR資格情報のURI形式、Keychain保存を追加。
 - [Done] iPhone向けARSession Capture Coordinatorで、同じ時刻の映像・ARKit Pose・IMU角速度・LiDAR深度を取得。
 - [Done] 深度バッファ、透視投影、Camera Rigの土台を持つ最小Metal 3Dプレビューを作成。
 - [Done] 実写前景を透過して3Dを見せる、切替可能な基本クロマキー合成を作成。
@@ -72,12 +78,12 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 **目的:** iPhoneを映像、姿勢、IMU、深度の正規入力としてMacへ接続する。
 
 - [Done] iPhone側Capture NodeのARSession取得コンポーネントを作成。
-- [Next] iPhone Capture NodeアプリのUI、HEVCエンコード、Mac Hostへの安全なWi-Fi伝送を実装。
+- [Next] Capture Node UIを独立したiOSアプリターゲットへ組み込み、権限文言と実機接続試験を追加。
 - [Done] Capture NodeとHostで共有するバージョン付き通信メッセージ、映像制御契約、長さプレフィックス codec、分割受信の再構成テストを実装。
 - [Next] AVCaptureSessionで映像を取得し、フレームIDと取得時刻を付与。
 - [Next] ARKit World TrackingとCoreMotionからPose、角速度、加速度、品質状態を送信。
 - [Next] LiDAR対応機でscene depthと信頼度を送信。非対応機では機能を明示的に無効化。
-- [Next] BonjourでMac Hostを発見し、QRコードまたは確認コードで相互認証。
+- [Done] iPhone側Bonjour探索、QRスキャン画面、Keychainへの資格情報保存を実装。
 - [Next] Wi-Fi上に、制御用の信頼性ストリームと、Pose／IMU用の低遅延データグラムを実装。
 - [Next] iPhoneとMac間のクロック差、RTT、ジッターを継続測定。
 - [Next] ARKitの再ローカライズ、追跡低下、接続断を品質イベントとして伝播。
@@ -102,7 +108,7 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 
 **目的:** 2〜4台のiPhoneを、独立したCapture Nodeとして安全に運用する。
 
-- [Next] Mac側Bonjour HostとNode Registryを実装。
+- [Done] Mac側Bonjour Hostと、ペアリング済みHelloを起点とするNode Registry接続を実装。
 - [Next] 各Nodeに証明書、役割、能力、校正、接続状態を紐付ける。
 - [Next] primaryCamera、secondaryCamera、trackerOnly、monitorOnlyの役割を実装。
 - [Next] Nodeごとのジッターバッファ、時刻整列、フレーム年齢、デコード遅延を実装。

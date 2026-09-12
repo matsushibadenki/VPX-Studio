@@ -65,6 +65,25 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
     }
 }
 
+/// One encoded video access unit. `encodedData` uses the length-prefixed NAL
+/// representation emitted by VideoToolbox. Parameter sets are included on key
+/// frames so a Host decoder can begin after joining an active stream.
+public struct CaptureEncodedVideoFrame: Sendable, Equatable {
+    public let header: CaptureVideoFrameHeader
+    public let encodedData: Data
+    public let parameterSets: [Data]
+
+    public init(
+        header: CaptureVideoFrameHeader,
+        encodedData: Data,
+        parameterSets: [Data] = []
+    ) {
+        self.header = header
+        self.encodedData = encodedData
+        self.parameterSets = parameterSets
+    }
+}
+
 public struct CapturePosePacket: Codable, Sendable, Equatable {
     public let sequence: UInt64
     public let captureTimeNanoseconds: UInt64

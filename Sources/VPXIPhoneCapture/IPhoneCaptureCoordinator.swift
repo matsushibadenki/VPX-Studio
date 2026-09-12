@@ -17,13 +17,14 @@ public struct CaptureDepthSample {
 }
 
 /// Captures video, ARKit tracking, and LiDAR depth from one ARSession.
-/// Encoding and network transport intentionally remain outside this type so the
-/// app can select an HEVC encoder and transport policy per production profile.
+/// HEVC encoding is optional and network transport remains outside this type.
 public final class IPhoneCaptureCoordinator: NSObject {
     public var onVideoSample: ((CaptureVideoSample) -> Void)?
+    public var onEncodedVideoFrame: ((CaptureEncodedVideoFrame) -> Void)?
     public var onPose: ((CapturePosePacket) -> Void)?
     public var onDepthSample: ((CaptureDepthSample) -> Void)?
     public var onTrackingQualityChanged: ((CaptureTrackingQuality) -> Void)?
+    public var onEncodingError: ((Error) -> Void)?
 
     public let session = ARSession()
     private let motionManager = CMMotionManager()
@@ -34,6 +35,7 @@ public final class IPhoneCaptureCoordinator: NSObject {
     private var frameSequence: UInt64 = 0
     private var referenceSpaceRevision: UInt64 = 0
     private var lastQuality: CaptureTrackingQuality?
+    private var videoEncoder: IPhoneHEVCVideoEncoder?
 
     public override init() {
         super.init()
@@ -54,6 +56,27 @@ public final class IPhoneCaptureCoordinator: NSObject {
     public func stop() {
         session.pause()
         motionManager.stopDeviceMotionUpdates()
+        videoEncoder?.completeFrames()
+    }
+
+    public func startHEVCEncoding(profile: CaptureVideoProfile = .uhd60HEVC) throws {
+        let encoder = try IPhoneHEVCVideoEncoder(profile: profile)
+        encoder.onEncodedFrame = { [weak self] frame in
+            self?.onEncodedVideoFrame?(frame)
+        }
+        encoder.onError = { [weak self] error in
+            self?.onEncodingError?(error)
+        }
+        videoEncoder = encoder
+    }
+
+    public func stopHEVCEncoding() {
+        videoEncoder?.invalidate()
+        videoEncoder = nil
+    }
+
+    public func requestVideoKeyFrame() {
+        videoEncoder?.requestKeyFrame()
     }
 
     private func startMotionUpdates() {
@@ -105,6 +128,11 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
             isKeyFrame: true
         )
         onVideoSample?(CaptureVideoSample(header: header, pixelBuffer: image))
+        do {
+            try videoEncoder?.encode(pixelBuffer: image, header: header)
+        } catch {
+            onEncodingError?(error)
+        }
 
         if let sceneDepth = frame.sceneDepth {
             let depthHeader = CaptureDepthFrameHeader(

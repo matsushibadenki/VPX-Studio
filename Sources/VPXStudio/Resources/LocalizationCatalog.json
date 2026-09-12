@@ -8,7 +8,7 @@
         "mode": "モード", "stop": "停止", "sources": "入力ソース", "iphoneCaptureNode": "iPhone Capture Node", "professionalVideoInput": "プロ映像入力", "externalTracking": "外部トラッキング",
         "connectLocalCamera": "ローカルカメラに接続", "chromaKey": "クロマキー", "monitor": "モニター", "renderer": "レンダラー", "tracking": "トラッキング", "frameRate": "フレームレート", "latency": "レイテンシ", "gpuFrameTime": "GPUフレーム時間", "droppedFrames": "推定ドロップフレーム", "focalLength": "焦点距離", "inputColor": "入力カラー", "radialDistortion": "放射歪み K1", "videoProfile": "映像プロファイル", "stageSpace": "ステージ座標",
         "ready": "準備完了", "recording": "収録中", "metalFrameGraph": "Metal Frame Graph", "greenThreshold": "緑のしきい値", "edgeSoftness": "エッジのソフトネス",
-        "language": "言語", "appearance": "表示モード", "system": "システム設定", "light": "ライト", "dark": "ダーク", "noInput": "入力なし", "noConnectedDevices": "接続中のデバイスはありません", "connecting": "接続中", "connected": "接続済み", "disconnected": "切断", "primaryCamera": "メインカメラ",
+        "language": "言語", "appearance": "表示モード", "system": "システム設定", "light": "ライト", "dark": "ダーク", "noInput": "入力なし", "noConnectedDevices": "接続中のデバイスはありません", "connecting": "接続中", "connected": "接続済み", "disconnected": "切断", "primaryCamera": "メインカメラ", "startIPhonePairing": "iPhoneペアリングを開始", "pairIPhone": "iPhoneをペアリング", "scanQRCode": "iPhoneでQRコードをスキャン", "verificationCode": "確認コード", "pairingInstructions": "iPhone Capture NodeでQRコードを読み取り、両端末の確認コードが一致することを確認してください。", "stopPairing": "ペアリングを停止",
         "preparingMetalRenderer": "Metalレンダラーを準備中", "metalPreviewActive": "Metalプレビューが有効", "previewStopped": "プレビューを停止", "cameraAccessNotGranted": "カメラへのアクセスが許可されていません", "liveCameraPreviewActive": "ライブカメラプレビューが有効"
       }
     },
@@ -20,7 +20,7 @@
         "mode": "Mode", "stop": "Stop", "sources": "Sources", "iphoneCaptureNode": "iPhone Capture Node", "professionalVideoInput": "Professional Video Input", "externalTracking": "External Tracking",
         "connectLocalCamera": "Connect local camera", "chromaKey": "Chroma key", "monitor": "Monitor", "renderer": "Renderer", "tracking": "Tracking", "frameRate": "Frame rate", "latency": "Latency", "gpuFrameTime": "GPU frame time", "droppedFrames": "Estimated dropped frames", "focalLength": "Focal length", "inputColor": "Input color", "radialDistortion": "Radial distortion K1", "videoProfile": "Video profile", "stageSpace": "Stage space",
         "ready": "Ready", "recording": "Recording", "metalFrameGraph": "Metal Frame Graph", "greenThreshold": "Green threshold", "edgeSoftness": "Edge softness",
-        "language": "Language", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark", "noInput": "No input", "noConnectedDevices": "No connected devices", "connecting": "Connecting", "connected": "Connected", "disconnected": "Disconnected", "primaryCamera": "Primary camera",
+        "language": "Language", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark", "noInput": "No input", "noConnectedDevices": "No connected devices", "connecting": "Connecting", "connected": "Connected", "disconnected": "Disconnected", "primaryCamera": "Primary camera", "startIPhonePairing": "Start iPhone Pairing", "pairIPhone": "Pair iPhone", "scanQRCode": "Scan the QR Code on iPhone", "verificationCode": "Verification Code", "pairingInstructions": "Scan the QR code in Capture Node, then confirm that both devices show the same verification code.", "stopPairing": "Stop Pairing",
         "preparingMetalRenderer": "Preparing Metal renderer", "metalPreviewActive": "Metal preview active", "previewStopped": "Preview stopped", "cameraAccessNotGranted": "Camera access was not granted", "liveCameraPreviewActive": "Live camera preview active"
       }
     },
@@ -32,7 +32,7 @@
         "mode": "模式", "stop": "停止", "sources": "输入源", "iphoneCaptureNode": "iPhone采集节点", "professionalVideoInput": "专业视频输入", "externalTracking": "外部跟踪",
         "connectLocalCamera": "连接本地相机", "chromaKey": "色度键控", "monitor": "监视器", "renderer": "渲染器", "tracking": "跟踪", "frameRate": "帧率", "latency": "延迟", "gpuFrameTime": "GPU帧时间", "droppedFrames": "估计丢帧", "focalLength": "焦距", "inputColor": "输入色彩", "radialDistortion": "径向畸变 K1", "videoProfile": "视频配置", "stageSpace": "舞台坐标",
         "ready": "就绪", "recording": "录制中", "metalFrameGraph": "Metal帧图", "greenThreshold": "绿色阈值", "edgeSoftness": "边缘柔化",
-        "language": "语言", "appearance": "外观", "system": "跟随系统", "light": "浅色", "dark": "深色", "noInput": "无输入", "noConnectedDevices": "没有已连接的设备", "connecting": "正在连接", "connected": "已连接", "disconnected": "已断开", "primaryCamera": "主摄像机",
+        "language": "语言", "appearance": "外观", "system": "跟随系统", "light": "浅色", "dark": "深色", "noInput": "无输入", "noConnectedDevices": "没有已连接的设备", "connecting": "正在连接", "connected": "已连接", "disconnected": "已断开", "primaryCamera": "主摄像机", "startIPhonePairing": "开始iPhone配对", "pairIPhone": "配对iPhone", "scanQRCode": "请在iPhone上扫描二维码", "verificationCode": "确认代码", "pairingInstructions": "请在Capture Node中扫描二维码，并确认两台设备显示相同的确认代码。", "stopPairing": "停止配对",
         "preparingMetalRenderer": "正在准备Metal渲染器", "metalPreviewActive": "Metal预览已启用", "previewStopped": "预览已停止", "cameraAccessNotGranted": "未授予相机访问权限", "liveCameraPreviewActive": "实时相机预览已启用"
       }
     }

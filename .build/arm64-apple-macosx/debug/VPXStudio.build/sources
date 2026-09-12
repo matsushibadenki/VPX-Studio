@@ -1,4 +1,8 @@
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeBonjourHost.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeHEVCVideoSource.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodePairingSheet.swift
 /Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift
+/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacHEVCVideoDecoder.swift
 /Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift
 /Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/CameraRig.swift
 /Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/DeviceContracts.swift

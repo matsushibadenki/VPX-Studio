@@ -2,12 +2,40 @@
   "": {
     "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/primary.swiftdeps"
   },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeBonjourHost.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeBonjourHost.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodeHEVCVideoSource.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodeHEVCVideoSource.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/CaptureNodePairingSheet.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/CaptureNodePairingSheet.dia"
+  },
   "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacCameraVideoSource.swift": {
     "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.d",
     "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swift.o",
     "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource~partial.swiftmodule",
     "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.swiftdeps",
     "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacCameraVideoSource.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Devices/MacHEVCVideoDecoder.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/MacHEVCVideoDecoder.dia"
   },
   "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXStudio/Domain/AppSettings.swift": {
     "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-ios/debug/VPXStudio.build/AppSettings.d",

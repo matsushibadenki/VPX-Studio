@@ -2,11 +2,39 @@
   "": {
     "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/primary.swiftdeps"
   },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeControlView.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeControlView.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeControlView.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeControlView~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeControlView.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeControlView.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CaptureNodeHostDiscovery.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CaptureNodeHostDiscovery.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/CapturePairingCredentialStore.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/CapturePairingCredentialStore.dia"
+  },
   "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneCaptureCoordinator.swift": {
     "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.d",
     "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swift.o",
     "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator~partial.swiftmodule",
     "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.swiftdeps",
     "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneCaptureCoordinator.dia"
+  },
+  "/Users/Shared/Program/Xcode/VPX-Studio/Sources/VPXIPhoneCapture/IPhoneHEVCVideoEncoder.swift": {
+    "dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder.d",
+    "object": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder.swift.o",
+    "swiftmodule": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder~partial.swiftmodule",
+    "swift-dependencies": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder.swiftdeps",
+    "diagnostics": "/Users/Shared/Program/Xcode/VPX-Studio/.build/arm64-apple-macosx/debug/VPXIPhoneCapture.build/IPhoneHEVCVideoEncoder.dia"
   }
 }

@@ -125,4 +125,111 @@ final class CaptureNodeProtocolTests: XCTestCase {
             command
         )
     }
+
+    func testEncodedFramePreservesKeyFrameDecoderConfiguration() {
+        let header = CaptureVideoFrameHeader(
+            sequence: 9,
+            captureTimeNanoseconds: 500,
+            width: 1_920,
+            height: 1_080,
+            codec: "hvc1",
+            isKeyFrame: true
+        )
+        let frame = CaptureEncodedVideoFrame(
+            header: header,
+            encodedData: Data([0, 0, 0, 4, 0x26, 1, 2, 3]),
+            parameterSets: [Data([1]), Data([2]), Data([3])]
+        )
+
+        XCTAssertEqual(frame.header, header)
+        XCTAssertEqual(frame.parameterSets.count, 3)
+        XCTAssertFalse(frame.encodedData.isEmpty)
+    }
+
+    func testPairingCredentialProtectsControlEnvelope() throws {
+        let credential = try CapturePairingCredential(
+            sessionID: UUID(),
+            secret: Data(repeating: 7, count: 32)
+        )
+        let protector = CaptureControlMessageProtector(credential: credential)
+        let command = CaptureNodeControlCommand(action: .requestKeyFrame)
+        let envelope = try CaptureMessageEnvelope(kind: .control, payload: command)
+
+        let encrypted = try protector.seal(envelope)
+        XCTAssertNotEqual(encrypted.combinedSealedBox, envelope.payload)
+        XCTAssertEqual(try protector.open(encrypted), envelope)
+    }
+
+    func testPairingCredentialRejectsDifferentSession() throws {
+        let secret = Data(repeating: 4, count: 32)
+        let sender = CaptureControlMessageProtector(
+            credential: try CapturePairingCredential(sessionID: UUID(), secret: secret)
+        )
+        let receiver = CaptureControlMessageProtector(
+            credential: try CapturePairingCredential(sessionID: UUID(), secret: secret)
+        )
+        let envelope = try CaptureMessageEnvelope(
+            kind: .control,
+            payload: CaptureNodeControlCommand(action: .beginClockSync)
+        )
+
+        XCTAssertThrowsError(try receiver.open(sender.seal(envelope))) { error in
+            XCTAssertEqual(error as? CapturePairingError, .sessionMismatch)
+        }
+    }
+
+    func testPairingCredentialRoundTripsThroughQRPayload() throws {
+        let credential = try CapturePairingCredential(
+            sessionID: UUID(),
+            secret: Data(repeating: 0x42, count: 32)
+        )
+
+        let decoded = try CapturePairingCredential(qrPayload: credential.qrPayload)
+        XCTAssertEqual(decoded, credential)
+        XCTAssertEqual(decoded.verificationCode, credential.verificationCode)
+    }
+
+    func testEncryptedVideoTransportRoundTripsAcrossFragments() throws {
+        let credential = try CapturePairingCredential(
+            sessionID: UUID(),
+            secret: Data(repeating: 9, count: 32)
+        )
+        let protector = CaptureControlMessageProtector(credential: credential)
+        let frame = CaptureEncodedVideoFrame(
+            header: CaptureVideoFrameHeader(
+                sequence: 20,
+                captureTimeNanoseconds: 900,
+                width: 1_920,
+                height: 1_080,
+                codec: "hvc1",
+                isKeyFrame: true
+            ),
+            encodedData: Data(repeating: 0xAB, count: 1_024),
+            parameterSets: [Data([1, 2]), Data([3, 4]), Data([5, 6])]
+        )
+        let clearPacket = try CaptureTransportPacketCodec.encode(.video(frame))
+        let encryptedPacket = try protector.sealPayload(clearPacket)
+        let streamFrame = try CaptureTransportStreamCodec.encode(encryptedPacket)
+
+        var streamDecoder = CaptureTransportStreamDecoder()
+        XCTAssertTrue(try streamDecoder.append(streamFrame.prefix(7)).isEmpty)
+        let packets = try streamDecoder.append(streamFrame.dropFirst(7))
+        XCTAssertEqual(packets.count, 1)
+        XCTAssertEqual(
+            try CaptureTransportPacketCodec.decode(try protector.openPayload(packets[0])),
+            .video(frame)
+        )
+    }
+
+    func testEncryptedTransportRejectsModifiedCiphertext() throws {
+        let protector = CaptureControlMessageProtector(
+            credential: try CapturePairingCredential(sessionID: UUID(), secret: Data(repeating: 1, count: 32))
+        )
+        var encrypted = try protector.sealPayload(Data([1, 2, 3]))
+        encrypted[encrypted.startIndex] ^= 0xFF
+
+        XCTAssertThrowsError(try protector.openPayload(encrypted)) { error in
+            XCTAssertEqual(error as? CapturePairingError, .decryptionFailed)
+        }
+    }
 }
