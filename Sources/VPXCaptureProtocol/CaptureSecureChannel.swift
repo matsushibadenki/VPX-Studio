@@ -22,6 +22,9 @@ public enum CaptureSecureChannelState: Sendable, Equatable {
 public final class CaptureSecureChannel: @unchecked Sendable {
     public var onControlPacket: ((CaptureMessageEnvelope) -> Void)?
     public var onVideoFrame: ((CaptureEncodedVideoFrame) -> Void)?
+    public var onPosePacket: ((CapturePosePacket) -> Void)?
+    public var onClockProbe: ((CaptureClockProbe) -> Void)?
+    public var onClockReply: ((CaptureClockReply) -> Void)?
     public var onStateChanged: ((CaptureSecureChannelState) -> Void)?
     public var onFailure: ((Error) -> Void)?
 
@@ -68,6 +71,18 @@ public final class CaptureSecureChannel: @unchecked Sendable {
 
     public func sendVideo(_ frame: CaptureEncodedVideoFrame) throws {
         try send(.video(frame))
+    }
+
+    public func sendPose(_ pose: CapturePosePacket) throws {
+        try send(.pose(pose))
+    }
+
+    public func sendClockProbe(_ probe: CaptureClockProbe) throws {
+        try send(.clockProbe(probe))
+    }
+
+    public func sendClockReply(_ reply: CaptureClockReply) throws {
+        try send(.clockReply(reply))
     }
 
     public func cancel() {
@@ -119,6 +134,9 @@ public final class CaptureSecureChannel: @unchecked Sendable {
             switch try CaptureTransportPacketCodec.decode(clearPacket) {
             case .control(let envelope): onControlPacket?(envelope)
             case .video(let frame): onVideoFrame?(frame)
+            case .pose(let pose): onPosePacket?(pose)
+            case .clockProbe(let probe): onClockProbe?(probe)
+            case .clockReply(let reply): onClockReply?(reply)
             }
         }
     }

@@ -55,6 +55,10 @@ final class StudioModel {
     var latencyMilliseconds = 0.0
     var gpuFrameMilliseconds = 0.0
     var droppedFrameEstimate: UInt64 = 0
+    var clockOffsetMilliseconds = 0.0
+    var networkRoundTripMilliseconds = 0.0
+    var networkJitterMilliseconds = 0.0
+    var clockDriftPartsPerMillion = 0.0
     var inputColorMetadata = ""
     var isRecording = false
     var chromaKeyEnabled = false
@@ -69,6 +73,10 @@ final class StudioModel {
     private(set) var activeCapturePairingCredential: CapturePairingCredential?
     private var captureNodeHost: CaptureNodeBonjourHost?
     private var captureNodeSources: [UUID: CaptureNodeHEVCVideoSource] = [:]
+    private var clockSyncTasks: [UUID: Task<Void, Never>] = [:]
+    private var clockSynchronizers: [UUID: CaptureClockSynchronizer] = [:]
+    private var clockStatistics: [UUID: CaptureClockStatistics] = [:]
+    private var poseJitterBuffers: [UUID: CapturePoseJitterBuffer] = [:]
 
     var activeCapturePairingCode: String? {
         activeCapturePairingCredential?.verificationCode
@@ -114,6 +122,11 @@ final class StudioModel {
         captureNodeHost?.stop()
         captureNodeHost = nil
         activeCapturePairingCredential = nil
+        clockSyncTasks.values.forEach { $0.cancel() }
+        clockSyncTasks.removeAll()
+        clockSynchronizers.removeAll()
+        clockStatistics.removeAll()
+        poseJitterBuffers.removeAll()
         captureNodeSources.values.forEach { $0.stop() }
         captureNodeSources.removeAll()
     }
@@ -186,7 +199,74 @@ final class StudioModel {
                 source?.onFailure?(error)
             }
         }
+        channel.onPosePacket = { [weak self] pose in
+            Task { @MainActor [weak self] in
+                self?.recordPose(pose, from: hello.nodeID)
+            }
+        }
+        channel.onClockReply = { [weak self] reply in
+            let hostReceiveNanoseconds = DispatchTime.now().uptimeNanoseconds
+            let exchange = CaptureClockExchange(
+                hostSendNanoseconds: reply.hostSendNanoseconds,
+                nodeReceiveNanoseconds: reply.nodeReceiveNanoseconds,
+                nodeSendNanoseconds: reply.nodeSendNanoseconds,
+                hostReceiveNanoseconds: hostReceiveNanoseconds
+            )
+            Task { @MainActor [weak self] in
+                self?.recordClockExchange(exchange, for: hello.nodeID)
+            }
+        }
+        startClockSync(for: hello.nodeID, channel: channel)
         deviceRegistry.updateState(for: hello.nodeID, to: .connected)
         selectedSourceName = hello.displayName
+    }
+
+    private static func streamQuality(for quality: CaptureTrackingQuality) -> StreamQuality {
+        switch quality {
+        case .nominal: .nominal
+        case .degraded, .limited: .degraded
+        case .lost: .lost
+        }
+    }
+
+    private func startClockSync(for nodeID: UUID, channel: CaptureSecureChannel) {
+        clockSyncTasks[nodeID]?.cancel()
+        clockSyncTasks[nodeID] = Task { [weak channel] in
+            while !Task.isCancelled {
+                let probe = CaptureClockProbe(
+                    hostSendNanoseconds: DispatchTime.now().uptimeNanoseconds
+                )
+                try? channel?.sendClockProbe(probe)
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func recordClockExchange(_ exchange: CaptureClockExchange, for nodeID: UUID) {
+        var synchronizer = clockSynchronizers[nodeID] ?? CaptureClockSynchronizer()
+        guard let result = try? synchronizer.record(exchange) else { return }
+        clockSynchronizers[nodeID] = synchronizer
+        guard result.wasAccepted else { return }
+        clockOffsetMilliseconds = result.statistics.nodeClockOffsetNanoseconds / 1_000_000
+        networkRoundTripMilliseconds = result.statistics.roundTripNanoseconds / 1_000_000
+        networkJitterMilliseconds = result.statistics.jitterNanoseconds / 1_000_000
+        clockDriftPartsPerMillion = result.statistics.driftPartsPerMillion
+        clockStatistics[nodeID] = result.statistics
+        captureNodeSources[nodeID]?.updateClockModel(result.statistics)
+    }
+
+    private func recordPose(_ pose: CapturePosePacket, from nodeID: UUID) {
+        var buffer = poseJitterBuffers[nodeID] ?? CapturePoseJitterBuffer()
+        let statistics = clockStatistics[nodeID]
+        buffer.enqueue(
+            pose,
+            nodeClockOffsetNanoseconds: statistics?.nodeClockOffsetNanoseconds ?? clockOffsetMilliseconds * 1_000_000,
+            clockDriftPartsPerMillion: statistics?.driftPartsPerMillion ?? clockDriftPartsPerMillion,
+            referenceHostNanoseconds: statistics?.referenceHostNanoseconds ?? 0
+        )
+        if let ready = buffer.dequeueLatestReady(hostNowNanoseconds: DispatchTime.now().uptimeNanoseconds) {
+            trackingQuality = Self.streamQuality(for: ready.quality)
+        }
+        poseJitterBuffers[nodeID] = buffer
     }
 }

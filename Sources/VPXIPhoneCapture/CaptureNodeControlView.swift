@@ -73,6 +73,16 @@ public final class CaptureNodeSessionModel {
                 self?.failFromAnyQueue(error)
             }
         }
+        coordinator.onPose = { [weak self] pose in
+            do {
+                try self?.channel?.sendPose(pose)
+            } catch {
+                self?.failFromAnyQueue(error)
+            }
+        }
+        // A probe is answered on the same encrypted channel. Dispatch uptime
+        // uses the device monotonic clock domain used by ARKit timestamps.
+        // This supplies the Node-side timestamps of the four-timestamp exchange.
         coordinator.onEncodingError = { [weak self] error in
             self?.failFromAnyQueue(error)
         }
@@ -117,6 +127,15 @@ public final class CaptureNodeSessionModel {
         }
         channel.onFailure = { [weak self] error in
             self?.failFromAnyQueue(error)
+        }
+        channel.onClockProbe = { [weak channel] probe in
+            let receivedAt = DispatchTime.now().uptimeNanoseconds
+            let reply = CaptureClockReply(
+                hostSendNanoseconds: probe.hostSendNanoseconds,
+                nodeReceiveNanoseconds: receivedAt,
+                nodeSendNanoseconds: DispatchTime.now().uptimeNanoseconds
+            )
+            try? channel?.sendClockReply(reply)
         }
         self.channel = channel
         status = .connecting

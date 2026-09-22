@@ -203,11 +203,157 @@ public struct CaptureClockEstimate: Sendable, Equatable {
     }
 }
 
+/// Host-to-Node probe for a continuous four-timestamp clock exchange.
+public struct CaptureClockProbe: Codable, Sendable, Equatable {
+    public let hostSendNanoseconds: UInt64
+
+    public init(hostSendNanoseconds: UInt64) {
+        self.hostSendNanoseconds = hostSendNanoseconds
+    }
+}
+
+/// Node reply. The Host adds its local receive timestamp before calculating a
+/// `CaptureClockEstimate`.
+public struct CaptureClockReply: Codable, Sendable, Equatable {
+    public let hostSendNanoseconds: UInt64
+    public let nodeReceiveNanoseconds: UInt64
+    public let nodeSendNanoseconds: UInt64
+
+    public init(
+        hostSendNanoseconds: UInt64,
+        nodeReceiveNanoseconds: UInt64,
+        nodeSendNanoseconds: UInt64
+    ) {
+        self.hostSendNanoseconds = hostSendNanoseconds
+        self.nodeReceiveNanoseconds = nodeReceiveNanoseconds
+        self.nodeSendNanoseconds = nodeSendNanoseconds
+    }
+}
+
 public enum CaptureClockEstimateError: LocalizedError, Equatable {
     case invalidTimestampOrder
 
     public var errorDescription: String? {
         "Capture clock exchange timestamps are inconsistent."
+    }
+}
+
+public struct CaptureClockStatistics: Sendable, Equatable {
+    /// Best offset selected from the lowest-RTT sample in the active window.
+    public let nodeClockOffsetNanoseconds: Double
+    public let roundTripNanoseconds: Double
+    /// Population standard deviation of accepted RTT samples.
+    public let jitterNanoseconds: Double
+    /// Estimated Node-clock drift relative to the Host clock, in ppm.
+    public let driftPartsPerMillion: Double
+    /// Host monotonic time for which `nodeClockOffsetNanoseconds` is estimated.
+    public let referenceHostNanoseconds: Double
+    public let acceptedSampleCount: Int
+
+    public init(
+        nodeClockOffsetNanoseconds: Double,
+        roundTripNanoseconds: Double,
+        jitterNanoseconds: Double,
+        driftPartsPerMillion: Double = 0,
+        referenceHostNanoseconds: Double = 0,
+        acceptedSampleCount: Int
+    ) {
+        self.nodeClockOffsetNanoseconds = nodeClockOffsetNanoseconds
+        self.roundTripNanoseconds = roundTripNanoseconds
+        self.jitterNanoseconds = jitterNanoseconds
+        self.driftPartsPerMillion = driftPartsPerMillion
+        self.referenceHostNanoseconds = referenceHostNanoseconds
+        self.acceptedSampleCount = acceptedSampleCount
+    }
+}
+
+public struct CaptureClockSynchronizationResult: Sendable, Equatable {
+    public let statistics: CaptureClockStatistics
+    public let wasAccepted: Bool
+}
+
+/// Keeps a bounded history of NTP-style samples. Extreme RTT values are ignored
+/// after an initial baseline is established, preventing transient Wi-Fi stalls
+/// from moving the active clock offset.
+public struct CaptureClockSynchronizer: Sendable {
+    private struct Sample: Sendable {
+        let estimate: CaptureClockEstimate
+        let hostReferenceNanoseconds: Double
+    }
+
+    private let maximumSamples: Int
+    private var samples: [Sample] = []
+
+    public init(maximumSamples: Int = 16) {
+        self.maximumSamples = max(3, maximumSamples)
+    }
+
+    public mutating func record(_ exchange: CaptureClockExchange) throws -> CaptureClockSynchronizationResult {
+        let estimate = try CaptureClockEstimate(exchange: exchange)
+        let accepted = shouldAccept(estimate)
+        if accepted {
+            samples.append(
+                Sample(
+                    estimate: estimate,
+                    hostReferenceNanoseconds: (
+                        Double(exchange.hostSendNanoseconds)
+                            + Double(exchange.hostReceiveNanoseconds)
+                    ) / 2
+                )
+            )
+            if samples.count > maximumSamples {
+                samples.removeFirst(samples.count - maximumSamples)
+            }
+        }
+        return CaptureClockSynchronizationResult(
+            statistics: currentStatistics(fallback: estimate),
+            wasAccepted: accepted
+        )
+    }
+
+    private func shouldAccept(_ estimate: CaptureClockEstimate) -> Bool {
+        guard samples.count >= 3 else { return true }
+        let sortedRTTs = samples.map(\.estimate.roundTripNanoseconds).sorted()
+        let median = sortedRTTs[sortedRTTs.count / 2]
+        let deviations = sortedRTTs.map { abs($0 - median) }.sorted()
+        let medianDeviation = deviations[deviations.count / 2]
+        let threshold = max(median * 3, median + max(1_000_000, medianDeviation * 6))
+        return estimate.roundTripNanoseconds <= threshold
+    }
+
+    private func currentStatistics(fallback: CaptureClockEstimate) -> CaptureClockStatistics {
+        let fallbackSample = Sample(estimate: fallback, hostReferenceNanoseconds: 0)
+        let activeSamples = samples.isEmpty ? [fallbackSample] : samples
+        let best = activeSamples.min(by: {
+            $0.estimate.roundTripNanoseconds < $1.estimate.roundTripNanoseconds
+        }) ?? fallbackSample
+        let mean = activeSamples.map(\.estimate.roundTripNanoseconds).reduce(0, +) / Double(activeSamples.count)
+        let variance = activeSamples
+            .map { pow($0.estimate.roundTripNanoseconds - mean, 2) }
+            .reduce(0, +) / Double(activeSamples.count)
+        let latest = activeSamples.last ?? best
+        let meanHost = activeSamples.map(\.hostReferenceNanoseconds).reduce(0, +) / Double(activeSamples.count)
+        let meanOffset = activeSamples.map(\.estimate.nodeClockOffsetNanoseconds).reduce(0, +) / Double(activeSamples.count)
+        let hostVariance = activeSamples
+            .map { pow($0.hostReferenceNanoseconds - meanHost, 2) }
+            .reduce(0, +)
+        let covariance = activeSamples
+            .map {
+                ($0.hostReferenceNanoseconds - meanHost)
+                    * ($0.estimate.nodeClockOffsetNanoseconds - meanOffset)
+            }
+            .reduce(0, +)
+        let driftPerNanosecond = hostVariance > 0 ? covariance / hostVariance : 0
+        let predictedOffset = best.estimate.nodeClockOffsetNanoseconds
+            + driftPerNanosecond * (latest.hostReferenceNanoseconds - best.hostReferenceNanoseconds)
+        return CaptureClockStatistics(
+            nodeClockOffsetNanoseconds: predictedOffset,
+            roundTripNanoseconds: best.estimate.roundTripNanoseconds,
+            jitterNanoseconds: sqrt(variance),
+            driftPartsPerMillion: driftPerNanosecond * 1_000_000,
+            referenceHostNanoseconds: latest.hostReferenceNanoseconds,
+            acceptedSampleCount: activeSamples.count
+        )
     }
 }
 

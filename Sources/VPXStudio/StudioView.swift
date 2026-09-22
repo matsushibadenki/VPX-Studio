@@ -150,6 +150,10 @@ struct StudioView: View {
             metric(localization.text(.tracking), studio.trackingQuality.rawValue)
             metric(localization.text(.frameRate), String(format: "%.1f fps", studio.frameRate))
             metric(localization.text(.latency), String(format: "%.1f ms", studio.latencyMilliseconds))
+            metric(localization.text(.clockOffset), String(format: "%.2f ms", studio.clockOffsetMilliseconds))
+            metric(localization.text(.networkRTT), String(format: "%.2f ms", studio.networkRoundTripMilliseconds))
+            metric(localization.text(.networkJitter), String(format: "%.2f ms", studio.networkJitterMilliseconds))
+            metric(localization.text(.clockDrift), String(format: "%.1f ppm", studio.clockDriftPartsPerMillion))
             metric(localization.text(.gpuFrameTime), String(format: "%.2f ms", studio.gpuFrameMilliseconds))
             metric(localization.text(.droppedFrames), String(studio.droppedFrameEstimate))
             metric(

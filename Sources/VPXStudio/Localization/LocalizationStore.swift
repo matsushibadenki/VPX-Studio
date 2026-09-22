@@ -4,7 +4,7 @@ import Observation
 enum LocalizationKey: String {
     case build, calibrate, rehearse, live, record, review
     case mode, stop, sources, iphoneCaptureNode, professionalVideoInput, externalTracking
-    case connectLocalCamera, chromaKey, monitor, renderer, tracking, frameRate, latency, gpuFrameTime, droppedFrames, focalLength, inputColor, radialDistortion, videoProfile, stageSpace
+    case connectLocalCamera, chromaKey, monitor, renderer, tracking, frameRate, latency, gpuFrameTime, droppedFrames, focalLength, inputColor, radialDistortion, videoProfile, stageSpace, clockOffset, networkRTT, networkJitter, clockDrift
     case ready, recording, metalFrameGraph, greenThreshold, edgeSoftness
     case language, appearance, system, light, dark, noInput, noConnectedDevices, connecting, connected, disconnected, primaryCamera
     case startIPhonePairing, pairIPhone, scanQRCode, verificationCode, pairingInstructions, stopPairing

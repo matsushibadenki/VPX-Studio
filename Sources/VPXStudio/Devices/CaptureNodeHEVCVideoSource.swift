@@ -12,6 +12,11 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     var onFailure: ((Error) -> Void)?
 
     private let decoder = MacHEVCVideoDecoder()
+    private let bufferLock = NSLock()
+    private var jitterBuffer = CaptureVideoJitterBuffer()
+    private var nodeClockOffsetNanoseconds = 0.0
+    private var clockDriftPartsPerMillion = 0.0
+    private var clockReferenceHostNanoseconds = 0.0
 
     init(hello: CaptureNodeHello) {
         descriptor = DeviceDescriptor(
@@ -35,7 +40,28 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     }
 
     func receive(_ encodedFrame: CaptureEncodedVideoFrame) throws {
-        try decoder.decode(encodedFrame)
+        let readyFrames = bufferLock.withLock { () -> [CaptureEncodedVideoFrame] in
+            jitterBuffer.enqueue(
+                encodedFrame,
+                nodeClockOffsetNanoseconds: nodeClockOffsetNanoseconds,
+                clockDriftPartsPerMillion: clockDriftPartsPerMillion,
+                referenceHostNanoseconds: clockReferenceHostNanoseconds
+            )
+            return jitterBuffer.dequeueReady(
+                hostNowNanoseconds: DispatchTime.now().uptimeNanoseconds
+            )
+        }
+        for frame in readyFrames {
+            try decoder.decode(frame)
+        }
+    }
+
+    func updateClockModel(_ statistics: CaptureClockStatistics) {
+        bufferLock.withLock {
+            nodeClockOffsetNanoseconds = statistics.nodeClockOffsetNanoseconds
+            clockDriftPartsPerMillion = statistics.driftPartsPerMillion
+            clockReferenceHostNanoseconds = statistics.referenceHostNanoseconds
+        }
     }
 
     private func publish(header: CaptureVideoFrameHeader, pixelBuffer: CVPixelBuffer) {

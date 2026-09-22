@@ -189,6 +189,135 @@ final class CaptureNodeProtocolTests: XCTestCase {
         XCTAssertEqual(decoded.verificationCode, credential.verificationCode)
     }
 
+    func testPoseTransportPacketRoundTrips() throws {
+        let pose = CapturePosePacket(
+            sequence: 88,
+            captureTimeNanoseconds: 1_234,
+            translationMeters: [1, 2, 3],
+            rotationQuaternion: [0, 0, 0, 1],
+            linearVelocityMetersPerSecond: [0, 0, 0],
+            angularVelocityRadiansPerSecond: [0.1, 0.2, 0.3],
+            quality: .nominal,
+            referenceSpaceRevision: 5
+        )
+
+        XCTAssertEqual(
+            try CaptureTransportPacketCodec.decode(
+                CaptureTransportPacketCodec.encode(.pose(pose))
+            ),
+            .pose(pose)
+        )
+    }
+
+    func testClockTransportPacketsRoundTrip() throws {
+        let probe = CaptureClockProbe(hostSendNanoseconds: 1_000)
+        let reply = CaptureClockReply(
+            hostSendNanoseconds: 1_000,
+            nodeReceiveNanoseconds: 1_030,
+            nodeSendNanoseconds: 1_035
+        )
+
+        XCTAssertEqual(
+            try CaptureTransportPacketCodec.decode(CaptureTransportPacketCodec.encode(.clockProbe(probe))),
+            .clockProbe(probe)
+        )
+        XCTAssertEqual(
+            try CaptureTransportPacketCodec.decode(CaptureTransportPacketCodec.encode(.clockReply(reply))),
+            .clockReply(reply)
+        )
+    }
+
+    func testClockSynchronizerRejectsExtremeRTTOutlier() throws {
+        var synchronizer = CaptureClockSynchronizer(maximumSamples: 8)
+        for index in 0..<3 {
+            let base = UInt64(index * 100_000)
+            _ = try synchronizer.record(
+                CaptureClockExchange(
+                    hostSendNanoseconds: base,
+                    nodeReceiveNanoseconds: base + 1_010,
+                    nodeSendNanoseconds: base + 1_020,
+                    hostReceiveNanoseconds: base + 2_030
+                )
+            )
+        }
+        let outlier = try synchronizer.record(
+            CaptureClockExchange(
+                hostSendNanoseconds: 1_000_000,
+                nodeReceiveNanoseconds: 1_001_010,
+                nodeSendNanoseconds: 1_001_020,
+                hostReceiveNanoseconds: 9_000_000
+            )
+        )
+
+        XCTAssertFalse(outlier.wasAccepted)
+        XCTAssertEqual(outlier.statistics.acceptedSampleCount, 3)
+    }
+
+    func testVideoJitterBufferOrdersFramesInHostClockDomain() {
+        func frame(sequence: UInt64, timestamp: UInt64) -> CaptureEncodedVideoFrame {
+            CaptureEncodedVideoFrame(
+                header: CaptureVideoFrameHeader(
+                    sequence: sequence,
+                    captureTimeNanoseconds: timestamp,
+                    width: 16,
+                    height: 16,
+                    codec: "hvc1",
+                    isKeyFrame: sequence == 1
+                ),
+                encodedData: Data([UInt8(sequence)])
+            )
+        }
+
+        var buffer = CaptureVideoJitterBuffer(targetDelayNanoseconds: 10, maximumFrameCount: 3)
+        buffer.enqueue(frame(sequence: 2, timestamp: 120), nodeClockOffsetNanoseconds: 20)
+        buffer.enqueue(frame(sequence: 1, timestamp: 110), nodeClockOffsetNanoseconds: 20)
+
+        XCTAssertEqual(buffer.dequeueReady(hostNowNanoseconds: 100).map(\.header.sequence), [1])
+        XCTAssertEqual(buffer.dequeueReady(hostNowNanoseconds: 120).map(\.header.sequence), [2])
+    }
+
+    func testPoseJitterBufferUsesLatestReadyPose() {
+        func pose(sequence: UInt64, timestamp: UInt64) -> CapturePosePacket {
+            CapturePosePacket(
+                sequence: sequence,
+                captureTimeNanoseconds: timestamp,
+                translationMeters: [Float(sequence), 0, 0],
+                rotationQuaternion: [0, 0, 0, 1],
+                linearVelocityMetersPerSecond: [0, 0, 0],
+                angularVelocityRadiansPerSecond: [0, 0, 0],
+                quality: .nominal,
+                referenceSpaceRevision: 1
+            )
+        }
+        var buffer = CapturePoseJitterBuffer(targetDelayNanoseconds: 10)
+        buffer.enqueue(pose(sequence: 1, timestamp: 110), nodeClockOffsetNanoseconds: 20)
+        buffer.enqueue(pose(sequence: 2, timestamp: 115), nodeClockOffsetNanoseconds: 20)
+
+        XCTAssertEqual(buffer.dequeueLatestReady(hostNowNanoseconds: 110)?.sequence, 2)
+    }
+
+    func testClockSynchronizerEstimatesDrift() throws {
+        var synchronizer = CaptureClockSynchronizer(maximumSamples: 8)
+        _ = try synchronizer.record(
+            CaptureClockExchange(
+                hostSendNanoseconds: 0,
+                nodeReceiveNanoseconds: 1_000,
+                nodeSendNanoseconds: 1_000,
+                hostReceiveNanoseconds: 2_000
+            )
+        )
+        let result = try synchronizer.record(
+            CaptureClockExchange(
+                hostSendNanoseconds: 1_000_000,
+                nodeReceiveNanoseconds: 1_002_000,
+                nodeSendNanoseconds: 1_002_000,
+                hostReceiveNanoseconds: 1_002_000
+            )
+        )
+
+        XCTAssertEqual(result.statistics.driftPartsPerMillion, 1_000, accuracy: 0.1)
+    }
+
     func testEncryptedVideoTransportRoundTripsAcrossFragments() throws {
         let credential = try CapturePairingCredential(
             sessionID: UUID(),

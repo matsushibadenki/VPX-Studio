@@ -23,6 +23,12 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 - [Done] ペアリング済みHelloを受けたMac HostがDevice RegistryへNodeを登録し、HEVC映像をRealtimeCoreへ投入する経路を追加。
 - [Done] iPhone Capture Nodeの3言語UIコンポーネントに、Host探索、QR読取、確認コード、接続、映像開始／停止を追加。
 - [Done] iPhone側Bonjour探索、QR資格情報のURI形式、Keychain保存を追加。
+- [Done] iPhone Capture NodeのSwiftUIアプリ起点と、QR深いリンクを受けるアプリフローを追加。
+- [Done] Pose／IMUをAES-GCM保護されたチャネルでMacへ送信し、Studioのトラッキング品質表示へ反映する経路を追加。
+- [Done] 1秒周期の4タイムスタンプ同期、Clock offset／Network RTTのHost表示を追加。
+- [Done] 最小RTTサンプル選択、RTT外れ値拒否、Network jitter推定とHost表示を追加。
+- [Done] 推定時計差をHEVC映像ジッターバッファへ適用し、時刻順の50ms標準バッファリングを追加。
+- [Done] 長期クロックドリフト（ppm）推定と、Pose用20msジッターバッファを追加。
 - [Done] iPhone向けARSession Capture Coordinatorで、同じ時刻の映像・ARKit Pose・IMU角速度・LiDAR深度を取得。
 - [Done] 深度バッファ、透視投影、Camera Rigの土台を持つ最小Metal 3Dプレビューを作成。
 - [Done] 実写前景を透過して3Dを見せる、切替可能な基本クロマキー合成を作成。
@@ -78,14 +84,16 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 **目的:** iPhoneを映像、姿勢、IMU、深度の正規入力としてMacへ接続する。
 
 - [Done] iPhone側Capture NodeのARSession取得コンポーネントを作成。
-- [Next] Capture Node UIを独立したiOSアプリターゲットへ組み込み、権限文言と実機接続試験を追加。
+- [Next] iOSアプリバンドルの署名、ローカルネットワーク／カメラ／モーション権限文言、実機接続試験を追加。
 - [Done] Capture NodeとHostで共有するバージョン付き通信メッセージ、映像制御契約、長さプレフィックス codec、分割受信の再構成テストを実装。
 - [Next] AVCaptureSessionで映像を取得し、フレームIDと取得時刻を付与。
-- [Next] ARKit World TrackingとCoreMotionからPose、角速度、加速度、品質状態を送信。
+- [Done] ARKit World TrackingとCoreMotionからPose、角速度、加速度、品質状態を送信。
 - [Next] LiDAR対応機でscene depthと信頼度を送信。非対応機では機能を明示的に無効化。
 - [Done] iPhone側Bonjour探索、QRスキャン画面、Keychainへの資格情報保存を実装。
 - [Next] Wi-Fi上に、制御用の信頼性ストリームと、Pose／IMU用の低遅延データグラムを実装。
-- [Next] iPhoneとMac間のクロック差、RTT、ジッターを継続測定。
+- [Done] iPhoneとMac間のクロック差とRTTを継続測定し、Host Inspectorへ表示。
+- [Done] 複数サンプルからジッターと外れ値を推定し、Host Inspectorへ表示。
+- [Done] 長期ドリフト推定と、Poseジッターバッファへの推定時計差適用を追加。
 - [Next] ARKitの再ローカライズ、追跡低下、接続断を品質イベントとして伝播。
 
 **完了条件:** 単一iPhoneの映像とPoseが同一タイムラインに整列し、トラッキング品質・時刻差・通信遅延をMacで確認できる。

@@ -5,6 +5,9 @@ import Foundation
 public enum CaptureTransportPacket: Sendable, Equatable {
     case control(CaptureMessageEnvelope)
     case video(CaptureEncodedVideoFrame)
+    case pose(CapturePosePacket)
+    case clockProbe(CaptureClockProbe)
+    case clockReply(CaptureClockReply)
 }
 
 public enum CaptureTransportCodecError: LocalizedError, Equatable {
@@ -23,6 +26,9 @@ public enum CaptureTransportPacketCodec {
     public static let maximumPacketLength = 67_108_864
     private static let controlMarker: UInt8 = 1
     private static let videoMarker: UInt8 = 2
+    private static let poseMarker: UInt8 = 3
+    private static let clockProbeMarker: UInt8 = 4
+    private static let clockReplyMarker: UInt8 = 5
 
     public static func encode(_ packet: CaptureTransportPacket) throws -> Data {
         var data = Data()
@@ -43,6 +49,15 @@ public enum CaptureTransportPacketCodec {
                 try appendLengthPrefixed(parameterSet, to: &data)
             }
             try appendLengthPrefixed(frame.encodedData, to: &data)
+        case .pose(let pose):
+            data.append(poseMarker)
+            try appendLengthPrefixed(JSONEncoder().encode(pose), to: &data)
+        case .clockProbe(let probe):
+            data.append(clockProbeMarker)
+            try appendLengthPrefixed(JSONEncoder().encode(probe), to: &data)
+        case .clockReply(let reply):
+            data.append(clockReplyMarker)
+            try appendLengthPrefixed(JSONEncoder().encode(reply), to: &data)
         }
         guard data.count <= maximumPacketLength else {
             throw CaptureTransportCodecError.packetTooLarge
@@ -78,6 +93,18 @@ public enum CaptureTransportPacketCodec {
                     parameterSets: parameterSets
                 )
             )
+        case poseMarker:
+            let payload = try reader.readLengthPrefixedData()
+            guard reader.isAtEnd else { throw CaptureTransportCodecError.malformedPacket }
+            return .pose(try JSONDecoder().decode(CapturePosePacket.self, from: payload))
+        case clockProbeMarker:
+            let payload = try reader.readLengthPrefixedData()
+            guard reader.isAtEnd else { throw CaptureTransportCodecError.malformedPacket }
+            return .clockProbe(try JSONDecoder().decode(CaptureClockProbe.self, from: payload))
+        case clockReplyMarker:
+            let payload = try reader.readLengthPrefixedData()
+            guard reader.isAtEnd else { throw CaptureTransportCodecError.malformedPacket }
+            return .clockReply(try JSONDecoder().decode(CaptureClockReply.self, from: payload))
         default:
             throw CaptureTransportCodecError.malformedPacket
         }

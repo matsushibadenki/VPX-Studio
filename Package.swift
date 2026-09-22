@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .executable(name: "VPXStudio", targets: ["VPXStudio"]),
+        .executable(name: "VPXIPhoneCaptureApp", targets: ["VPXIPhoneCaptureApp"]),
         .library(name: "VPXCaptureProtocol", targets: ["VPXCaptureProtocol"]),
         .library(name: "VPXIPhoneCapture", targets: ["VPXIPhoneCapture"])
     ],
@@ -14,6 +15,10 @@ let package = Package(
         .target(
             name: "VPXIPhoneCapture",
             dependencies: ["VPXCaptureProtocol"]
+        ),
+        .executableTarget(
+            name: "VPXIPhoneCaptureApp",
+            dependencies: ["VPXIPhoneCapture"]
         ),
         .executableTarget(
             name: "VPXStudio",
