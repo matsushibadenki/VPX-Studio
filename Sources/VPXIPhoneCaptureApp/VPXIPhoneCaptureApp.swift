@@ -18,4 +18,14 @@ struct VPXIPhoneCaptureApp: App {
         }
     }
 }
+#else
+import Foundation
+
+// SwiftPM resolves executable targets for the host platform while loading the
+// package in Xcode. Keep a no-op host entry point so the iOS app target does not
+// produce an undefined _main when the package is inspected on macOS.
+@main
+struct VPXIPhoneCaptureAppHostStub {
+    static func main() {}
+}
 #endif
