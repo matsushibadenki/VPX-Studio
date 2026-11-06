@@ -1,3 +1,5 @@
+import Foundation
+
 final class RealtimeCore {
     private(set) var isRunning = false
     let latestVideoFrame = LatestVideoFrameStore()
@@ -19,7 +21,12 @@ final class RealtimeCore {
         videoSources.append(source)
     }
 
-    func ingest(_ frame: VideoFrame) {
-        latestVideoFrame.put(frame)
+    func detach(_ id: UUID) {
+        videoSources.filter { $0.descriptor.id == id }.forEach { $0.stop() }
+        videoSources.removeAll { $0.descriptor.id == id }
+    }
+
+    func ingest(_ frame: VideoFrame, from sourceID: UUID) {
+        latestVideoFrame.put(frame, sourceID: sourceID)
     }
 }

@@ -10,7 +10,7 @@ struct VPXStudioApp: App {
         WindowGroup {
             StudioView(studio: studio, localization: localization, settings: settings)
                 .frame(minWidth: 980, minHeight: 640)
-                .preferredColorScheme(settings.appearance.colorScheme)
+                .environment(\.colorScheme, settings.effectiveColorScheme)
         }
         .defaultSize(width: 1440, height: 900)
     }

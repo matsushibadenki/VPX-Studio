@@ -1,8 +1,10 @@
 import CoreMedia
 import Foundation
 import QuartzCore
+import IOSurface
 
 struct RealtimeMetricsSnapshot: Codable, Sendable {
+    var pipeline = PipelineMeasurements()
     var inputHealth: VideoInputHealth = .missing
     var frameRate: Double = 0
     var gpuFrameMilliseconds: Double = 0
@@ -19,6 +21,54 @@ final class RealtimeMetricsStore: @unchecked Sendable {
     private var frameWindowStart = CACurrentMediaTime()
     private var framesInWindow: UInt64 = 0
     private var previousFrameStart: CFTimeInterval?
+    private var lastFrameIdentifier: UInt64?
+    private var lastReceiveTime: Double?
+    private var seenBuffers: [UInt] = []
+    private var seenSurfaces: [UInt32] = []
+
+    func recordInput(_ frame: VideoFrame, renderTime: Double, importMilliseconds: Double) {
+        lock.lock()
+        defer { lock.unlock() }
+        snapshot.pipeline.textureImportMilliseconds = importMilliseconds
+        let timing = frame.telemetry
+        snapshot.pipeline.captureToEncodeMilliseconds = FrameTelemetry.milliseconds(from: timing.captured, to: timing.encodeCompleted)
+        snapshot.pipeline.transportMilliseconds = FrameTelemetry.milliseconds(from: timing.encodeCompleted, to: timing.received)
+        snapshot.pipeline.captureToReceiveMilliseconds = FrameTelemetry.milliseconds(from: timing.captured, to: timing.received)
+        snapshot.pipeline.receiveToDecodeMilliseconds = FrameTelemetry.milliseconds(from: timing.received, to: timing.decodeStarted)
+        snapshot.pipeline.decodeMilliseconds = FrameTelemetry.milliseconds(from: timing.decodeStarted, to: timing.decodeCompleted)
+        snapshot.pipeline.decodeToRenderMilliseconds = FrameTelemetry.milliseconds(from: timing.decodeCompleted ?? timing.received, to: renderTime)
+        if lastFrameIdentifier == frame.identifier, lastReceiveTime == timing.received { return }
+        lastFrameIdentifier = frame.identifier
+        lastReceiveTime = timing.received
+        snapshot.pipeline.observedFrames &+= 1
+        snapshot.pipeline.knownCPUCopyCount &+= timing.knownCPUCopyCount
+        snapshot.pipeline.knownCPUCopyBytes &+= timing.knownCPUCopyBytes
+        let identity = UInt(bitPattern: Unmanaged.passUnretained(frame.pixelBuffer).toOpaque())
+        if seenBuffers.contains(identity) { snapshot.pipeline.pixelBufferReuseCount &+= 1 }
+        seenBuffers.append(identity)
+        if seenBuffers.count > 256 { seenBuffers.removeFirst() }
+        if let surface = CVPixelBufferGetIOSurface(frame.pixelBuffer)?.takeUnretainedValue() {
+            let id = IOSurfaceGetID(surface)
+            snapshot.pipeline.ioSurfaceFrames &+= 1
+            if seenSurfaces.contains(id) { snapshot.pipeline.ioSurfaceReuseCount &+= 1 }
+            seenSurfaces.append(id)
+            if seenSurfaces.count > 256 { seenSurfaces.removeFirst() }
+        }
+    }
+
+    func recordPresentation(at presented: Double, submitted: Double, captureTime: Double?) {
+        lock.lock()
+        defer { lock.unlock() }
+        snapshot.pipeline.renderToPresentMilliseconds = FrameTelemetry.milliseconds(from: submitted, to: presented)
+        snapshot.pipeline.captureToPresentMilliseconds = FrameTelemetry.milliseconds(from: captureTime, to: presented)
+    }
+
+    func sampleMemory() {
+        let bytes = PipelineMeasurements.residentMemory()
+        lock.lock()
+        snapshot.pipeline.residentMemoryBytes = bytes
+        lock.unlock()
+    }
 
     func recordFrameSubmitted(at time: CFTimeInterval, inputFrame: VideoFrame?) {
         lock.lock()
@@ -46,6 +96,15 @@ final class RealtimeMetricsStore: @unchecked Sendable {
         } else {
             snapshot.inputHealth = .missing
             snapshot.inputAgeMilliseconds = 0
+        }
+        if snapshot.inputHealth != .active {
+            snapshot.pipeline.captureToEncodeMilliseconds = nil
+            snapshot.pipeline.transportMilliseconds = nil
+            snapshot.pipeline.captureToReceiveMilliseconds = nil
+            snapshot.pipeline.receiveToDecodeMilliseconds = nil
+            snapshot.pipeline.decodeMilliseconds = nil
+            snapshot.pipeline.decodeToRenderMilliseconds = nil
+            snapshot.pipeline.textureImportMilliseconds = nil
         }
     }
 

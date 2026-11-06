@@ -4,6 +4,13 @@ import Observation
 enum LocalizationKey: String {
     case videoInputStale
     case exportDiagnostics, diagnosticsExportFailed
+    case archiveDiagnostics, stopArchive
+    case runBenchmark
+    case pipelineMeasurements, captureReceive, receiveDecode, decodeDuration, renderWait, textureImport
+    case captureEncode, networkTransport
+    case presentationDelay, capturePresent, poseCaptureAge, residentMemory, knownCopies, bufferReuse, surfaceReuse
+    case diagnosticsHistory, noEvents, close, discardedEvents, clock
+    case stateCurrent, stateStale, stateUnmeasured, stateLost, stateDegraded, stateEstimated
     case build, calibrate, rehearse, live, record, review
     case mode, stop, sources, iphoneCaptureNode, professionalVideoInput, externalTracking
     case connectLocalCamera, chromaKey, monitor, renderer, tracking, frameRate, latency, gpuFrameTime, droppedFrames, focalLength, inputColor, radialDistortion, videoProfile, stageSpace, clockOffset, networkRTT, networkJitter, clockDrift

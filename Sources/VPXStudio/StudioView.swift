@@ -8,18 +8,19 @@ struct StudioView: View {
     @Bindable var settings: AppSettings
     @State private var showsCaptureNodePairing = false
     @State private var diagnosticsExportError: String?
+    @State private var showsDiagnostics = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             HStack(spacing: 0) {
-                sourcePanel
+                ScrollView { sourcePanel }
                     .frame(width: 220)
                 Divider()
                 viewport
                 Divider()
-                inspector
+                ScrollView { inspector }
                     .frame(width: 270)
             }
             Divider()
@@ -29,6 +30,9 @@ struct StudioView: View {
         .padding(.vertical, 12)
         .onAppear { studio.startPreview() }
         .onDisappear { studio.stopPreview() }
+        .sheet(isPresented: $showsDiagnostics) {
+            DiagnosticsHistoryView(studio: studio, localization: localization)
+        }
         .alert(localization.text(.diagnosticsExportFailed), isPresented: Binding(
             get: { diagnosticsExportError != nil },
             set: { if !$0 { diagnosticsExportError = nil } }
@@ -56,6 +60,11 @@ struct StudioView: View {
             }
             .pickerStyle(.segmented)
             Spacer(minLength: 16)
+            Button { showsDiagnostics = true } label: {
+                Image(systemName: "waveform.path.ecg")
+            }
+            .help(localization.text(.diagnosticsHistory))
+            .accessibilityLabel(localization.text(.diagnosticsHistory))
             Button {
                 exportDiagnostics()
             } label: {
@@ -79,6 +88,8 @@ struct StudioView: View {
                 Image(systemName: "globe")
                     .accessibilityLabel(localization.text(.language))
             }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
             Button(studio.isRecording ? localization.text(.stop) : localization.text(.record)) {
                 studio.isRecording.toggle()
             }
@@ -90,6 +101,10 @@ struct StudioView: View {
     private var sourcePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(localization.text(.sources)).font(.headline)
+            Button(localization.text(.runBenchmark), systemImage: "speedometer") {
+                studio.startBenchmark()
+            }
+            .disabled(studio.isBenchmarkRunning)
             Label(localization.text(.iphoneCaptureNode), systemImage: "iphone")
             Label(localization.text(.professionalVideoInput), systemImage: "video")
             Label(localization.text(.externalTracking), systemImage: "scope")
@@ -109,6 +124,7 @@ struct StudioView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(studio.deviceRegistry.devices) { device in
+                    Button { studio.selectSource(device.id) } label: {
                     HStack(alignment: .firstTextBaseline) {
                         Image(systemName: device.descriptor.capabilities.contains(.video) ? "video.fill" : "dot.radiowaves.left.and.right")
                             .foregroundStyle(deviceStateColor(device.state))
@@ -119,7 +135,14 @@ struct StudioView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        if studio.selectedSourceID == device.id {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                        }
                     }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(device.state != .connected || !device.descriptor.capabilities.contains(.video))
+                    .accessibilityAddTraits(studio.selectedSourceID == device.id ? .isSelected : [])
                 }
             }
             Spacer()
@@ -180,7 +203,7 @@ struct StudioView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(localization.text(.monitor)).font(.headline)
             metric(localization.text(.renderer), studio.rendererStatus.text(localization))
-            metric(localization.text(.tracking), studio.trackingQuality.rawValue)
+            metric(localization.text(.tracking), localization.text(trackingQualityKey))
             metric(localization.text(.frameRate), String(format: "%.1f fps", studio.frameRate))
             metric(localization.text(.latency), String(format: "%.1f ms", studio.latencyMilliseconds))
             metric(localization.text(.clockOffset), String(format: "%.2f ms", studio.clockOffsetMilliseconds))
@@ -236,6 +259,15 @@ struct StudioView: View {
         }
         .font(.footnote)
         .padding(.top, 10)
+    }
+
+    private var trackingQualityKey: LocalizationKey {
+        switch studio.trackingQuality {
+        case .nominal: .stateCurrent
+        case .degraded: .stateDegraded
+        case .estimated: .stateEstimated
+        case .lost: .stateLost
+        }
     }
 
     private func metric(_ title: String, _ value: String) -> some View {

@@ -62,6 +62,7 @@ struct VideoFrame {
     let colorMetadata: VideoColorMetadata
     let pixelBuffer: CVPixelBuffer
     let quality: StreamQuality
+    var telemetry = FrameTelemetry()
 }
 
 struct PoseSample {

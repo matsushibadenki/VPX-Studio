@@ -2,6 +2,15 @@ import XCTest
 import VPXCaptureProtocol
 
 final class CaptureNodeProtocolTests: XCTestCase {
+    func testOptionalEncodingTimestampIsWireCompatible() throws {
+        let legacy = Data(#"{"sequence":1,"captureTimeNanoseconds":100,"width":640,"height":360,"codec":"hvc1","isKeyFrame":true}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(CaptureVideoFrameHeader.self, from: legacy).encodeCompletedNanoseconds)
+        let header = CaptureVideoFrameHeader(sequence: 1, captureTimeNanoseconds: 100, width: 640, height: 360,
+            codec: "hvc1", isKeyFrame: true, encodeCompletedNanoseconds: 200)
+        let frame = CaptureEncodedVideoFrame(header: header, encodedData: Data([1, 2]))
+        let packet = try CaptureTransportPacketCodec.decode(CaptureTransportPacketCodec.encode(.video(frame)))
+        XCTAssertEqual(packet, .video(frame))
+    }
     func testHelloRoundTripsThroughJSON() throws {
         let hello = CaptureNodeHello(
             nodeID: UUID(),

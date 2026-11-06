@@ -1,5 +1,7 @@
 # VPX Studio Roadmap
 
+詳細な進捗・受入条件の正本は[docs/ROADMAP.md](docs/ROADMAP.md)。以下は概要であり、検証待ちの条件は詳細版を参照する。
+
 ## 目的
 
 VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バーチャルプロダクション基盤として段階的に構築する。最初に低遅延の単一カメラ合成を成立させ、その後にiPhone Capture Node、複数端末、プロ機材、LED wallへ拡張する。
@@ -46,13 +48,15 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 
 **目的:** 以後の実装を比較・検証できる状態にする。
 
-- [Next] 対象Mac、macOS、Xcode、iPhone OS、対応iPhone機種の最小バージョンを固定。
+- 🟢 [Done] `Config/ReleaseBaseline.json`に対応環境を固定し、環境チェックとdeployment target整合テストを追加。
 - [Done] Stage座標系（m単位、右手系、+X右／+Y上／-Z前方、床面原点）の規約を定義。
 - [Done] UHD 4K/60p、10-bitを標準ライブ映像プロファイルとして定義。
 - [Done] 入力フレーム年齢とMetal GPUフレーム時間を計測・表示。
-- [Next] 入力、デコード、Metal、出力の区間ごとの完全なレイテンシ計測を実装。
+- 🟢 [Done] 入力、エンコード、伝送、デコード、Metal、drawable表示の区間計測を実装。未測定区間を省略し、時計推定と光学遅延の限界を明記。
 - [Done] GPUフレーム時間と推定ドロップフレームのテレメトリを実装。
-- [Next] CPUコピー回数とメモリ使用量のテレメトリを実装。
+- 🟢 [Done] 観測フレームの既知CPUコピー、CVPixelBuffer／IOSurface再観測、プロセスメモリを計測・表示。
+- 🟢 [Done] 固定120フレーム・120Poseのベンチマーク、Pose取得年齢、診断JSON v4とJSONL連続保存を追加。全56件のテストと実アプリでの描画・保存を確認。
+- ⭕️ [Pending] 実iPhone・機材別4K60／10-bit・光学遅延・ストレージ障害注入の認定。
 - [Done] 英語、日本語、简体中文の実行時ローカライズカタログを導入。
 - [Later] 実機ベンチマークを自動実行し、対応ハードウェア別に結果を蓄積。
 

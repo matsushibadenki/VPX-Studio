@@ -178,18 +178,20 @@ public final class IPhoneHEVCVideoEncoder {
 
         let isKeyFrame = Self.isKeyFrame(sampleBuffer)
         let parameterSets = isKeyFrame ? Self.parameterSets(for: sampleBuffer) : []
+        let encodedData = Data(bytes: dataPointer, count: totalLength)
         let encodedHeader = CaptureVideoFrameHeader(
             sequence: pendingFrame.header.sequence,
             captureTimeNanoseconds: pendingFrame.header.captureTimeNanoseconds,
             width: pendingFrame.header.width,
             height: pendingFrame.header.height,
             codec: "hvc1",
-            isKeyFrame: isKeyFrame
+            isKeyFrame: isKeyFrame,
+            encodeCompletedNanoseconds: DispatchTime.now().uptimeNanoseconds
         )
         onEncodedFrame?(
             CaptureEncodedVideoFrame(
                 header: encodedHeader,
-                encodedData: Data(bytes: dataPointer, count: totalLength),
+                encodedData: encodedData,
                 parameterSets: parameterSets
             )
         )

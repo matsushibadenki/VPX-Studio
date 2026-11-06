@@ -47,6 +47,8 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
     public let height: UInt32
     public let codec: String
     public let isKeyFrame: Bool
+    /// Optional, additive telemetry field. Older Nodes omit it.
+    public let encodeCompletedNanoseconds: UInt64?
 
     public init(
         sequence: UInt64,
@@ -54,7 +56,8 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
         width: UInt32,
         height: UInt32,
         codec: String,
-        isKeyFrame: Bool
+        isKeyFrame: Bool,
+        encodeCompletedNanoseconds: UInt64? = nil
     ) {
         self.sequence = sequence
         self.captureTimeNanoseconds = captureTimeNanoseconds
@@ -62,6 +65,7 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
         self.height = height
         self.codec = codec
         self.isKeyFrame = isKeyFrame
+        self.encodeCompletedNanoseconds = encodeCompletedNanoseconds
     }
 }
 

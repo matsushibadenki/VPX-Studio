@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "macOSMinimum": "15.0",
+  "iOSMinimum": "18.0",
+  "xcodeVersion": "27.2",
+  "swiftVersion": "6.4.2",
+  "macArchitecture": "arm64",
+  "macMinimumChip": "Apple M1",
+  "macMinimumMemoryGiB": 8,
+  "macRecommendedMemoryGiB": 16,
+  "iPhoneMinimum": "iPhone XS / XS Max / XR",
+  "iPhoneRecommended": "iPhone 12 or newer",
+  "depthRequirement": "Optional: LiDAR-capable Pro model, iPhone 12 Pro or newer",
+  "standardProfile": "3840x2160 60fps 10-bit",
+  "performanceCertification": "Pending hardware benchmarks; minimum compatibility does not guarantee 4K60 throughput"
+}

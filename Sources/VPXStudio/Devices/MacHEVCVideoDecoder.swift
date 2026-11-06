@@ -31,7 +31,7 @@ enum MacHEVCVideoDecoderError: LocalizedError {
 /// caller owns jitter buffering and transport; this type only converts an
 /// authenticated, ordered stream into CVPixelBuffers for the Metal pipeline.
 final class MacHEVCVideoDecoder {
-    var onDecodedFrame: ((CaptureVideoFrameHeader, CVPixelBuffer) -> Void)?
+    var onDecodedFrame: ((CaptureVideoFrameHeader, CVPixelBuffer, FrameTelemetry) -> Void)?
     var onError: ((Error) -> Void)?
 
     private var decompressionSession: VTDecompressionSession?
@@ -42,7 +42,7 @@ final class MacHEVCVideoDecoder {
         invalidate()
     }
 
-    func decode(_ frame: CaptureEncodedVideoFrame) throws {
+    func decode(_ frame: CaptureEncodedVideoFrame, telemetry: FrameTelemetry = FrameTelemetry()) throws {
         if frame.header.isKeyFrame, !frame.parameterSets.isEmpty {
             try configureIfNeeded(parameterSets: frame.parameterSets)
         }
@@ -94,7 +94,11 @@ final class MacHEVCVideoDecoder {
             throw MacHEVCVideoDecoderError.sampleBufferCreationFailed(sampleBufferStatus)
         }
 
-        let pendingFrame = PendingDecodedFrame(header: frame.header)
+        var timing = telemetry
+        timing.decodeStarted = CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()))
+        timing.knownCPUCopyCount &+= 1
+        timing.knownCPUCopyBytes &+= UInt64(frame.encodedData.count)
+        let pendingFrame = PendingDecodedFrame(header: frame.header, telemetry: timing)
         let sourceFrameRefcon = Unmanaged.passRetained(pendingFrame).toOpaque()
         var infoFlags = VTDecodeInfoFlags()
         let decodeStatus = VTDecompressionSessionDecodeFrame(
@@ -208,14 +212,18 @@ final class MacHEVCVideoDecoder {
             decoder.onError?(MacHEVCVideoDecoderError.decodingFailed(status))
             return
         }
-        decoder.onDecodedFrame?(pendingFrame.header, imageBuffer)
+        var timing = pendingFrame.telemetry
+        timing.decodeCompleted = CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()))
+        decoder.onDecodedFrame?(pendingFrame.header, imageBuffer, timing)
     }
 }
 
 private final class PendingDecodedFrame {
     let header: CaptureVideoFrameHeader
+    let telemetry: FrameTelemetry
 
-    init(header: CaptureVideoFrameHeader) {
+    init(header: CaptureVideoFrameHeader, telemetry: FrameTelemetry) {
         self.header = header
+        self.telemetry = telemetry
     }
 }

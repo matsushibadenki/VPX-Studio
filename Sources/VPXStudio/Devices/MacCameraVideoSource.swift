@@ -89,7 +89,11 @@ extension MacCameraVideoSource: AVCaptureVideoDataOutputSampleBufferDelegate {
                 hostReceiveTime: CMClockGetTime(CMClockGetHostTimeClock()),
                 colorMetadata: VideoColorMetadata.read(from: pixelBuffer),
                 pixelBuffer: pixelBuffer,
-                quality: .nominal
+                quality: .nominal,
+                telemetry: FrameTelemetry(
+                    captured: CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)),
+                    received: CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()))
+                )
             )
         )
     }

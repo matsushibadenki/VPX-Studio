@@ -17,6 +17,8 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     private var nodeClockOffsetNanoseconds = 0.0
     private var clockDriftPartsPerMillion = 0.0
     private var clockReferenceHostNanoseconds = 0.0
+    private var clockLastAcceptedNanoseconds: UInt64?
+    private var receivedTimes: [UInt64: Double] = [:]
 
     init(hello: CaptureNodeHello) {
         descriptor = DeviceDescriptor(
@@ -24,8 +26,8 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
             displayName: hello.displayName,
             capabilities: Self.deviceCapabilities(from: hello.capabilities)
         )
-        decoder.onDecodedFrame = { [weak self] header, pixelBuffer in
-            self?.publish(header: header, pixelBuffer: pixelBuffer)
+        decoder.onDecodedFrame = { [weak self] header, pixelBuffer, telemetry in
+            self?.publish(header: header, pixelBuffer: pixelBuffer, telemetry: telemetry)
         }
         decoder.onError = { [weak self] error in
             self?.onFailure?(error)
@@ -35,12 +37,23 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     func start() throws {}
 
     func stop() {
+        resetClockModel()
         decoder.completeFrames()
         decoder.invalidate()
     }
 
     func receive(_ encodedFrame: CaptureEncodedVideoFrame) throws {
-        let readyFrames = bufferLock.withLock { () -> [CaptureEncodedVideoFrame] in
+        let readyFrames = bufferLock.withLock { () -> [(CaptureEncodedVideoFrame, FrameTelemetry)] in
+            let received = CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()))
+            receivedTimes[encodedFrame.header.sequence] = received
+            if receivedTimes.count > 64, let oldest = receivedTimes.keys.min() { receivedTimes.removeValue(forKey: oldest) }
+            guard ClockFreshness.evaluate(lastAccepted: clockLastAcceptedNanoseconds,
+                                          now: DispatchTime.now().uptimeNanoseconds) == .current else {
+                jitterBuffer = CaptureVideoJitterBuffer()
+                // Keep HEVC reference frames up to date while suppressing output.
+                receivedTimes.removeAll()
+                return [(encodedFrame, FrameTelemetry(received: received))]
+            }
             jitterBuffer.enqueue(
                 encodedFrame,
                 nodeClockOffsetNanoseconds: nodeClockOffsetNanoseconds,
@@ -49,22 +62,49 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
             )
             return jitterBuffer.dequeueReady(
                 hostNowNanoseconds: DispatchTime.now().uptimeNanoseconds
-            )
+            ).map { frame in
+                let capture = HostClockMapping.hostTime(nodeNanoseconds: frame.header.captureTimeNanoseconds,
+                    offset: nodeClockOffsetNanoseconds, driftPPM: clockDriftPartsPerMillion,
+                    referenceHost: clockReferenceHostNanoseconds)
+                return (frame, FrameTelemetry(captured: capture.map { $0 / 1_000_000_000 },
+                    received: receivedTimes.removeValue(forKey: frame.header.sequence),
+                    encodeCompleted: frame.header.encodeCompletedNanoseconds.flatMap {
+                        HostClockMapping.hostTime(nodeNanoseconds: $0, offset: nodeClockOffsetNanoseconds,
+                            driftPPM: clockDriftPartsPerMillion, referenceHost: clockReferenceHostNanoseconds)
+                    }.map { $0 / 1_000_000_000 }))
+            }
         }
-        for frame in readyFrames {
-            try decoder.decode(frame)
+        for (frame, telemetry) in readyFrames {
+            try decoder.decode(frame, telemetry: telemetry)
         }
     }
 
-    func updateClockModel(_ statistics: CaptureClockStatistics) {
+    func updateClockModel(_ statistics: CaptureClockStatistics,
+                          acceptedAtNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds) {
         bufferLock.withLock {
+            clockLastAcceptedNanoseconds = acceptedAtNanoseconds
             nodeClockOffsetNanoseconds = statistics.nodeClockOffsetNanoseconds
             clockDriftPartsPerMillion = statistics.driftPartsPerMillion
             clockReferenceHostNanoseconds = statistics.referenceHostNanoseconds
         }
     }
 
-    private func publish(header: CaptureVideoFrameHeader, pixelBuffer: CVPixelBuffer) {
+    func hasCurrentClock(at now: UInt64) -> Bool {
+        bufferLock.withLock {
+            ClockFreshness.evaluate(lastAccepted: clockLastAcceptedNanoseconds, now: now) == .current
+        }
+    }
+
+    func resetClockModel() {
+        bufferLock.withLock {
+            clockLastAcceptedNanoseconds = nil
+            jitterBuffer = CaptureVideoJitterBuffer()
+            receivedTimes.removeAll()
+        }
+    }
+
+    private func publish(header: CaptureVideoFrameHeader, pixelBuffer: CVPixelBuffer, telemetry: FrameTelemetry) {
+        guard hasCurrentClock(at: DispatchTime.now().uptimeNanoseconds) else { return }
         let captureTime = CMTime(
             value: Int64(clamping: header.captureTimeNanoseconds),
             timescale: 1_000_000_000
@@ -81,7 +121,8 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
                     yCbCrMatrix: nil
                 ),
                 pixelBuffer: pixelBuffer,
-                quality: .nominal
+                quality: .nominal,
+                telemetry: telemetry
             )
         )
     }

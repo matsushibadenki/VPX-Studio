@@ -7,11 +7,21 @@ import Foundation
 final class LatestVideoFrameStore {
     private let lock = NSLock()
     private var latest: VideoFrame?
+    private var selectedSourceID: UUID?
 
-    func put(_ frame: VideoFrame) {
+    func selectSource(_ id: UUID?) {
         lock.lock()
+        defer { lock.unlock() }
+        guard selectedSourceID != id else { return }
+        selectedSourceID = id
+        latest = nil
+    }
+
+    func put(_ frame: VideoFrame, sourceID: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard sourceID == selectedSourceID else { return }
         latest = frame
-        lock.unlock()
     }
 
     func read() -> VideoFrame? {

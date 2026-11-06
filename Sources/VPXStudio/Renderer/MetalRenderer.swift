@@ -136,7 +136,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             CMTimeGetSeconds(CMTimeSubtract(CMClockGetTime(CMClockGetHostTimeClock()), $0.hostReceiveTime))
         }
         let health = VideoInputHealth.evaluate(ageSeconds: age, qualityLost: inputFrame?.quality == .lost)
+        let importStart = CACurrentMediaTime()
         let texture = cameraTexture(for: health == .active ? inputFrame : nil)
+        if let inputFrame, texture != nil {
+            metrics.recordInput(inputFrame, renderTime: frameStart,
+                                importMilliseconds: (CACurrentMediaTime() - importStart) * 1_000)
+        }
 
         do {
             for pass in try frameGraph.orderedPasses() {
@@ -163,6 +168,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             return
         }
         commandBuffer.present(drawable)
+        let captured = texture == nil ? nil : inputFrame?.telemetry.captured
+        drawable.addPresentedHandler { [metrics] presented in
+            metrics.recordPresentation(at: presented.presentedTime, submitted: frameStart, captureTime: captured)
+        }
         metrics.recordFrameSubmitted(at: frameStart, inputFrame: inputFrame)
         commandBuffer.addCompletedHandler { [metrics] completedBuffer in
             metrics.recordGPUCompletion(
