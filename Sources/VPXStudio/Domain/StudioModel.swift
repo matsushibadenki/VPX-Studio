@@ -77,6 +77,9 @@ final class StudioModel {
     private var clockSyncTasks: [UUID: Task<Void, Never>] = [:]
     private var clockSynchronizers: [UUID: CaptureClockSynchronizer] = [:]
     private var clockStatistics: [UUID: CaptureClockStatistics] = [:]
+    private var clockLastAccepted: [UUID: UInt64] = [:]
+    private var poseHealth: [UUID: PoseHealth] = [:]
+    private var selectedTrackingNodeID: UUID?
     private var poseJitterBuffers: [UUID: CapturePoseJitterBuffer] = [:]
 
     var activeCapturePairingCode: String? {
@@ -127,6 +130,10 @@ final class StudioModel {
         clockSyncTasks.removeAll()
         clockSynchronizers.removeAll()
         clockStatistics.removeAll()
+        clockLastAccepted.removeAll()
+        poseHealth.removeAll()
+        selectedTrackingNodeID = nil
+        trackingQuality = .lost
         poseJitterBuffers.removeAll()
         captureNodeSources.values.forEach { $0.stop() }
         captureNodeSources.removeAll()
@@ -152,6 +159,8 @@ final class StudioModel {
                 try self.realtimeCore.attach(source)
                 self.deviceRegistry.updateState(for: source.descriptor.id, to: .connected)
                 self.selectedSourceName = source.descriptor.displayName
+                self.selectedTrackingNodeID = nil
+                self.trackingQuality = .lost
                 self.rendererStatus = .liveCameraPreviewActive
             } catch {
                 self.rendererStatus = .error(error.localizedDescription)
@@ -160,6 +169,13 @@ final class StudioModel {
     }
 
     func refreshMetrics() {
+        let now = DispatchTime.now().uptimeNanoseconds
+        if let id = selectedTrackingNodeID {
+            trackingQuality = (poseHealth[id] ?? PoseHealth()).effectiveQuality(
+                now: now, clock: .evaluate(lastAccepted: clockLastAccepted[id], now: now))
+        } else {
+            trackingQuality = .lost
+        }
         let metrics = realtimeCore.metrics.read()
         inputHealth = metrics.inputHealth
         frameRate = metrics.frameRate
@@ -167,6 +183,34 @@ final class StudioModel {
         gpuFrameMilliseconds = metrics.gpuFrameMilliseconds
         droppedFrameEstimate = metrics.droppedFrameEstimate
         inputColorMetadata = realtimeCore.latestVideoFrame.read()?.colorMetadata.summary ?? ""
+    }
+
+    func diagnosticsReport() -> DiagnosticsReport {
+        let now = DispatchTime.now().uptimeNanoseconds
+        return DiagnosticsReport(
+            schemaVersion: 2, capturedAt: Date(), configuration: projectConfiguration,
+            sourceName: selectedSourceName, metrics: realtimeCore.metrics.read(),
+            clockOffsetMilliseconds: clockOffsetMilliseconds,
+            networkRoundTripMilliseconds: networkRoundTripMilliseconds,
+            networkJitterMilliseconds: networkJitterMilliseconds,
+            clockDriftPartsPerMillion: clockDriftPartsPerMillion,
+            nodes: captureNodeSources.keys.sorted(by: { $0.uuidString < $1.uuidString }).map { id in
+                let stats = clockStatistics[id]
+                let last = clockLastAccepted[id]
+                return .init(nodeID: id,
+                    freshness: .evaluate(lastAccepted: last, now: now),
+                    sampleAgeMilliseconds: last.flatMap { now >= $0 ? Double(now - $0) / 1_000_000 : nil },
+                    offsetMilliseconds: stats.map { $0.nodeClockOffsetNanoseconds / 1_000_000 },
+                    roundTripMilliseconds: stats.map { $0.roundTripNanoseconds / 1_000_000 },
+                    jitterMilliseconds: stats.map { $0.jitterNanoseconds / 1_000_000 },
+                    driftPartsPerMillion: stats?.driftPartsPerMillion,
+                    poseQuality: (poseHealth[id] ?? PoseHealth()).effectiveQuality(
+                        now: now, clock: .evaluate(lastAccepted: last, now: now)),
+                    poseAgeMilliseconds: poseHealth[id]?.lastAcceptedNanoseconds.flatMap {
+                        now >= $0 ? Double(now - $0) / 1_000_000 : nil
+                    })
+            }
+        )
     }
 
     private func attachCaptureNode(hello: CaptureNodeHello, channel: CaptureSecureChannel) {
@@ -221,6 +265,8 @@ final class StudioModel {
         startClockSync(for: hello.nodeID, channel: channel)
         deviceRegistry.updateState(for: hello.nodeID, to: .connected)
         selectedSourceName = hello.displayName
+        selectedTrackingNodeID = hello.nodeID
+        trackingQuality = .lost
     }
 
     private static func streamQuality(for quality: CaptureTrackingQuality) -> StreamQuality {
@@ -233,6 +279,11 @@ final class StudioModel {
 
     private func startClockSync(for nodeID: UUID, channel: CaptureSecureChannel) {
         clockSyncTasks[nodeID]?.cancel()
+        clockLastAccepted.removeValue(forKey: nodeID)
+        clockStatistics.removeValue(forKey: nodeID)
+        clockSynchronizers.removeValue(forKey: nodeID)
+        poseJitterBuffers.removeValue(forKey: nodeID)
+        poseHealth.removeValue(forKey: nodeID)
         clockSyncTasks[nodeID] = Task { [weak channel] in
             while !Task.isCancelled {
                 let probe = CaptureClockProbe(
@@ -249,6 +300,7 @@ final class StudioModel {
         guard let result = try? synchronizer.record(exchange) else { return }
         clockSynchronizers[nodeID] = synchronizer
         guard result.wasAccepted else { return }
+        clockLastAccepted[nodeID] = exchange.hostReceiveNanoseconds
         clockOffsetMilliseconds = result.statistics.nodeClockOffsetNanoseconds / 1_000_000
         networkRoundTripMilliseconds = result.statistics.roundTripNanoseconds / 1_000_000
         networkJitterMilliseconds = result.statistics.jitterNanoseconds / 1_000_000
@@ -258,16 +310,24 @@ final class StudioModel {
     }
 
     private func recordPose(_ pose: CapturePosePacket, from nodeID: UUID) {
+        guard ClockFreshness.evaluate(lastAccepted: clockLastAccepted[nodeID], now: DispatchTime.now().uptimeNanoseconds) == .current,
+              let statistics = clockStatistics[nodeID] else {
+            poseJitterBuffers.removeValue(forKey: nodeID)
+            poseHealth.removeValue(forKey: nodeID)
+            if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
+            return
+        }
         var buffer = poseJitterBuffers[nodeID] ?? CapturePoseJitterBuffer()
-        let statistics = clockStatistics[nodeID]
         buffer.enqueue(
             pose,
-            nodeClockOffsetNanoseconds: statistics?.nodeClockOffsetNanoseconds ?? clockOffsetMilliseconds * 1_000_000,
-            clockDriftPartsPerMillion: statistics?.driftPartsPerMillion ?? clockDriftPartsPerMillion,
-            referenceHostNanoseconds: statistics?.referenceHostNanoseconds ?? 0
+            nodeClockOffsetNanoseconds: statistics.nodeClockOffsetNanoseconds,
+            clockDriftPartsPerMillion: statistics.driftPartsPerMillion,
+            referenceHostNanoseconds: statistics.referenceHostNanoseconds
         )
         if let ready = buffer.dequeueLatestReady(hostNowNanoseconds: DispatchTime.now().uptimeNanoseconds) {
-            trackingQuality = Self.streamQuality(for: ready.quality)
+            let quality = Self.streamQuality(for: ready.quality)
+            poseHealth[nodeID] = PoseHealth(lastAcceptedNanoseconds: DispatchTime.now().uptimeNanoseconds, quality: quality)
+            if selectedTrackingNodeID == nodeID { trackingQuality = quality }
         }
         poseJitterBuffers[nodeID] = buffer
     }

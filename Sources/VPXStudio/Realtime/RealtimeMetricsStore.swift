@@ -2,7 +2,7 @@ import CoreMedia
 import Foundation
 import QuartzCore
 
-struct RealtimeMetricsSnapshot: Sendable {
+struct RealtimeMetricsSnapshot: Codable, Sendable {
     var inputHealth: VideoInputHealth = .missing
     var frameRate: Double = 0
     var gpuFrameMilliseconds: Double = 0

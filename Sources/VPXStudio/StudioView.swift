@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct StudioView: View {
     @Bindable var studio: StudioModel
     @Bindable var localization: LocalizationStore
     @Bindable var settings: AppSettings
     @State private var showsCaptureNodePairing = false
+    @State private var diagnosticsExportError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +29,14 @@ struct StudioView: View {
         .padding(.vertical, 12)
         .onAppear { studio.startPreview() }
         .onDisappear { studio.stopPreview() }
+        .alert(localization.text(.diagnosticsExportFailed), isPresented: Binding(
+            get: { diagnosticsExportError != nil },
+            set: { if !$0 { diagnosticsExportError = nil } }
+        )) {
+            Button("OK") { diagnosticsExportError = nil }
+        } message: {
+            Text(diagnosticsExportError ?? "")
+        }
         .task {
             while !Task.isCancelled {
                 studio.refreshMetrics()
@@ -45,6 +56,13 @@ struct StudioView: View {
             }
             .pickerStyle(.segmented)
             Spacer(minLength: 16)
+            Button {
+                exportDiagnostics()
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .help(localization.text(.exportDiagnostics))
+            .accessibilityLabel(localization.text(.exportDiagnostics))
             Menu {
                 Picker(localization.text(.language), selection: $localization.selectedLanguageID) {
                     ForEach(localization.languages, id: \.id) { language in
@@ -117,6 +135,21 @@ struct StudioView: View {
                     localization: localization,
                     stop: studio.stopCaptureNodeHost
                 )
+            }
+        }
+    }
+
+    private func exportDiagnostics() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "VPX-diagnostics.json"
+        panel.title = localization.text(.exportDiagnostics)
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try studio.diagnosticsReport().save(to: url)
+            } catch {
+                diagnosticsExportError = error.localizedDescription
             }
         }
     }

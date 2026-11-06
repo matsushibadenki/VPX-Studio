@@ -76,10 +76,15 @@ public struct CapturePoseJitterBuffer: Sendable {
     public let maximumPacketCount: Int
     public private(set) var droppedPacketCount: UInt64 = 0
     private var entries: [Entry] = []
+    private var lastDeliveredSequence: UInt64?
+    private var lastDeliveredTime: Double?
+    public let maximumAgeNanoseconds: Double
 
-    public init(targetDelayNanoseconds: Double = 20_000_000, maximumPacketCount: Int = 48) {
+    public init(targetDelayNanoseconds: Double = 20_000_000, maximumPacketCount: Int = 48,
+                maximumAgeNanoseconds: Double = 500_000_000) {
         self.targetDelayNanoseconds = max(0, targetDelayNanoseconds)
         self.maximumPacketCount = max(1, maximumPacketCount)
+        self.maximumAgeNanoseconds = maximumAgeNanoseconds.isFinite ? max(0, maximumAgeNanoseconds) : 500_000_000
     }
 
     public mutating func enqueue(
@@ -88,7 +93,8 @@ public struct CapturePoseJitterBuffer: Sendable {
         clockDriftPartsPerMillion: Double = 0,
         referenceHostNanoseconds: Double = 0
     ) {
-        guard !entries.contains(where: { $0.pose.sequence == pose.sequence }) else {
+        guard lastDeliveredSequence.map({ pose.sequence > $0 }) ?? true,
+              !entries.contains(where: { $0.pose.sequence == pose.sequence }) else {
             droppedPacketCount &+= 1
             return
         }
@@ -96,6 +102,11 @@ public struct CapturePoseJitterBuffer: Sendable {
         let effectiveOffset = nodeClockOffsetNanoseconds
             + elapsed * clockDriftPartsPerMillion / 1_000_000
         let presentationTime = Double(pose.captureTimeNanoseconds) - effectiveOffset
+        guard presentationTime.isFinite, presentationTime >= 0,
+              lastDeliveredTime.map({ presentationTime > $0 }) ?? true else {
+            droppedPacketCount &+= 1
+            return
+        }
         let entry = Entry(pose: pose, hostPresentationNanoseconds: presentationTime)
         let index = entries.firstIndex { $0.hostPresentationNanoseconds > presentationTime } ?? entries.endIndex
         entries.insert(entry, at: index)
@@ -110,8 +121,17 @@ public struct CapturePoseJitterBuffer: Sendable {
         let deadline = Double(hostNowNanoseconds) - targetDelayNanoseconds
         var latest: CapturePosePacket?
         while let first = entries.first, first.hostPresentationNanoseconds <= deadline {
-            latest = first.pose
             entries.removeFirst()
+            guard Double(hostNowNanoseconds) - first.hostPresentationNanoseconds <= maximumAgeNanoseconds,
+                  lastDeliveredSequence.map({ first.pose.sequence > $0 }) ?? true,
+                  lastDeliveredTime.map({ first.hostPresentationNanoseconds > $0 }) ?? true else {
+                droppedPacketCount &+= 1
+                continue
+            }
+            if latest != nil { droppedPacketCount &+= 1 }
+            latest = first.pose
+            lastDeliveredSequence = first.pose.sequence
+            lastDeliveredTime = first.hostPresentationNanoseconds
         }
         return latest
     }

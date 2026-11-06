@@ -1,6 +1,6 @@
 import Foundation
 
-enum VideoInputHealth: Sendable, Equatable {
+enum VideoInputHealth: String, Codable, Sendable, Equatable {
     case missing, active, stale
 
     /// Uses host receive time only; remote capture clocks must be aligned first.
