@@ -2,6 +2,7 @@ import Foundation
 import Observation
 
 enum LocalizationKey: String {
+    case videoInputStale
     case build, calibrate, rehearse, live, record, review
     case mode, stop, sources, iphoneCaptureNode, professionalVideoInput, externalTracking
     case connectLocalCamera, chromaKey, monitor, renderer, tracking, frameRate, latency, gpuFrameTime, droppedFrames, focalLength, inputColor, radialDistortion, videoProfile, stageSpace, clockOffset, networkRTT, networkJitter, clockDrift

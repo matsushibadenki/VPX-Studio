@@ -1,4 +1,5 @@
 import MetalKit
+import CoreMedia
 import os
 
 final class MetalRenderer: NSObject, MTKViewDelegate {
@@ -131,7 +132,11 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         )
 
         let inputFrame = latestVideoFrame.read()
-        let texture = cameraTexture(for: inputFrame)
+        let age = inputFrame.map {
+            CMTimeGetSeconds(CMTimeSubtract(CMClockGetTime(CMClockGetHostTimeClock()), $0.hostReceiveTime))
+        }
+        let health = VideoInputHealth.evaluate(ageSeconds: age, qualityLost: inputFrame?.quality == .lost)
+        let texture = cameraTexture(for: health == .active ? inputFrame : nil)
 
         do {
             for pass in try frameGraph.orderedPasses() {

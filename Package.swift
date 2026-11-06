@@ -23,7 +23,10 @@ let package = Package(
         .executableTarget(
             name: "VPXStudio",
             dependencies: ["VPXCaptureProtocol"],
-            resources: [.process("Resources")]
+            resources: [
+                .copy("Resources/PreviewShaders.metal"),
+                .process("Resources/LocalizationCatalog.json")
+            ]
         ),
         .testTarget(
             name: "VPXStudioTests",

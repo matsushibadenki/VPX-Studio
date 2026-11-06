@@ -190,6 +190,11 @@ struct StudioView: View {
 
     private var statusBar: some View {
         HStack {
+            if studio.inputHealth != .active {
+                Label(localization.text(studio.inputHealth == .stale ? .videoInputStale : .noInput),
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
             Label(studio.isRecording ? localization.text(.recording) : localization.text(.ready),
                   systemImage: studio.isRecording ? "record.circle.fill" : "checkmark.circle")
             Spacer()

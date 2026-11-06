@@ -3,6 +3,7 @@ import Foundation
 import QuartzCore
 
 struct RealtimeMetricsSnapshot: Sendable {
+    var inputHealth: VideoInputHealth = .missing
     var frameRate: Double = 0
     var gpuFrameMilliseconds: Double = 0
     var inputAgeMilliseconds: Double = 0
@@ -40,8 +41,10 @@ final class RealtimeMetricsStore: @unchecked Sendable {
         if let inputFrame {
             let hostNow = CMClockGetTime(CMClockGetHostTimeClock())
             let age = CMTimeSubtract(hostNow, inputFrame.hostReceiveTime)
+            snapshot.inputHealth = .evaluate(ageSeconds: CMTimeGetSeconds(age), qualityLost: inputFrame.quality == .lost)
             snapshot.inputAgeMilliseconds = max(0, CMTimeGetSeconds(age) * 1_000)
         } else {
+            snapshot.inputHealth = .missing
             snapshot.inputAgeMilliseconds = 0
         }
     }

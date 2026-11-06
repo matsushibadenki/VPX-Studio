@@ -52,6 +52,7 @@ final class StudioModel {
     var trackingQuality: StreamQuality = .lost
     var rendererStatus: StudioStatus = .preparingMetalRenderer
     var frameRate = 0.0
+    var inputHealth: VideoInputHealth = .missing
     var latencyMilliseconds = 0.0
     var gpuFrameMilliseconds = 0.0
     var droppedFrameEstimate: UInt64 = 0
@@ -160,6 +161,7 @@ final class StudioModel {
 
     func refreshMetrics() {
         let metrics = realtimeCore.metrics.read()
+        inputHealth = metrics.inputHealth
         frameRate = metrics.frameRate
         latencyMilliseconds = metrics.inputAgeMilliseconds
         gpuFrameMilliseconds = metrics.gpuFrameMilliseconds
