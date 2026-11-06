@@ -3,6 +3,16 @@ import VPXCaptureProtocol
 import Observation
 
 enum LocalizationKey: String {
+    case calibrationLensMismatch
+    case checkerboardIntrinsicsExpired
+    case solveCheckerboard, checkerboardHelp, checkerboardSolving, checkerboardInvalid, checkerboardIntrinsicsMismatch, checkerboardDegenerate, checkerboardResidualRejected, checkerboardMaximumResidual, checkerboardMeasured
+    case depthPass, depthConfidencePass, depthPreviewHelp, depthPreviewFar, depthPreviewMissing, depthPreviewAge
+    case temporalMatte, temporalMatteHelp, temporalMatteStrength, temporalMatteDisabled, temporalMatteReset, temporalMatteBlend, temporalMatteReuse
+    case poseAlignment, poseAlignmentUnavailable, poseMeasured, poseInterpolated, posePredicted, posePredictionHorizon, posePredictionPositionError, posePredictionRotationError
+    case registerStage, registerStageHelp, stageRegistrationMissing, saveCalibration, stageAnchoredAt
+    case poseRejected, poseMalformed, poseUnavailable, poseReordered, poseMotionRejected, poseReacquiring
+    case copyCameraID
+    case calibrationReady, calibrationMissing, calibrationEstimated, calibrationExpired, calibrationFuture, calibrationResidual, calibrationCameraMismatch, calibrationFormatMismatch, calibrationReferenceChanged, calibrationRMSE, calibrationValidated
     case depthConfidence, clockUncertainty, trackingReason
     case qualityNormal, qualityInitializing, qualityExcessiveMotion, qualityInsufficientFeatures, qualityRelocalizing, qualityInterrupted, qualityInterruptionEnded, qualityFailed, qualityDisconnected, qualityMotionUnavailable
     case videoInputStale

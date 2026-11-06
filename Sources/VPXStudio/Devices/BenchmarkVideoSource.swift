@@ -38,8 +38,8 @@ struct BenchmarkResult: Codable {
 /// A finite, deterministic image/Pose replay through the same source mailbox and renderer.
 /// Mutable playback state is confined to queue; callbacks are configured before start.
 final class BenchmarkVideoSource: VideoSource, @unchecked Sendable {
-    let descriptor = DeviceDescriptor(id: UUID(), displayName: "VPX Benchmark · 640×360 / 60p", capabilities: [.video, .pose])
-    let fixture = BenchmarkFixture.standard
+    let descriptor: DeviceDescriptor
+    let fixture: BenchmarkFixture
     var onFrame: ((VideoFrame) -> Void)?
     var onPose: ((BenchmarkFixture.Pose, UInt64) -> Void)?
     var onComplete: (() -> Void)?
@@ -49,7 +49,13 @@ final class BenchmarkVideoSource: VideoSource, @unchecked Sendable {
     private var index = 0
     private var pool: CVPixelBufferPool?
 
-    init() throws {
+    init(fixture: BenchmarkFixture = .standard) throws {
+        guard fixture.width > 0, fixture.width <= 8192, fixture.height > 0, fixture.height <= 8192,
+              fixture.framesPerSecond > 0, fixture.framesPerSecond <= 240,
+              !fixture.poses.isEmpty, fixture.poses.count <= 10_000 else { throw CocoaError(.coderInvalidValue) }
+        self.fixture = fixture
+        descriptor = DeviceDescriptor(id: UUID(), displayName: "VPX Benchmark · \(fixture.width)×\(fixture.height) / \(fixture.framesPerSecond)p",
+            capabilities: [.video, .pose])
         let status = CVPixelBufferPoolCreate(nil, nil, [
             kCVPixelBufferWidthKey: fixture.width,
             kCVPixelBufferHeightKey: fixture.height,
@@ -107,13 +113,24 @@ final class BenchmarkVideoSource: VideoSource, @unchecked Sendable {
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
         guard let base = CVPixelBufferGetBaseAddress(buffer) else { throw CocoaError(.coderInvalidValue) }
         let stride = CVPixelBufferGetBytesPerRow(buffer)
-        for y in 0..<fixture.height {
-            let row = base.advanced(by: y * stride).assumingMemoryBound(to: UInt32.self)
-            for x in 0..<fixture.width {
-                let red = UInt32((x + index * 3) % 256)
-                let green = UInt32(y % 256)
-                let blue = UInt32((x / 40 + y / 40) % 2 == 0 ? 32 : 224)
-                row[x] = 0xFF000000 | red << 16 | green << 8 | blue
+        // Compute x-dependent channels once, rather than dividing/modulo for
+        // every pixel in every row. Only two small row templates are retained.
+        var even = [UInt32](repeating: 0,count: fixture.width)
+        var odd = even
+        for x in 0..<fixture.width {
+            let red = UInt32((x + index * 3) & 255) << 16
+            let blue: UInt32 = (x / 40) % 2 == 0 ? 32 : 224
+            even[x] = 0xFF000000 | red | blue
+            odd[x] = 0xFF000000 | red | (256-blue)
+        }
+        even.withUnsafeBufferPointer { even in
+            odd.withUnsafeBufferPointer { odd in
+                for y in 0..<fixture.height {
+                    let template = (y / 40) % 2 == 0 ? even.baseAddress! : odd.baseAddress!
+                    let green = UInt32(y & 255) << 8
+                    let row = base.advanced(by: y * stride).assumingMemoryBound(to: UInt32.self)
+                    for x in 0..<fixture.width { row[x] = template[x] | green }
+                }
             }
         }
         let time = CMTime(value: Int64(clamping: hostNanoseconds), timescale: 1_000_000_000)

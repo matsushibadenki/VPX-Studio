@@ -25,8 +25,8 @@ enum SDRInputEncoding: String, CaseIterable, Codable {
     }
 }
 
-enum CompositeDebugView: String, CaseIterable, Codable { case composite, scene, video, matte }
-enum OutputProtection: String, Codable { case normal, inputLost, trackingLost, gpuOverload, unknownColor, unsupportedFormat }
+enum CompositeDebugView: String, CaseIterable, Codable { case composite, scene, video, matte, depth, depthConfidence }
+enum OutputProtection: String, Codable { case normal, inputLost, trackingLost, poseUnaligned, gpuOverload, unknownColor, unsupportedFormat }
 
 struct RenderConfiguration: Codable {
     let sceneName: String
@@ -42,6 +42,9 @@ struct RenderConfiguration: Codable {
     let chromaEnabled: Bool
     let greenThreshold: Float
     let greenSoftness: Float
+    var temporalMatteEnabled: Bool?
+    var temporalMatteStrength: Float?
+    var depthPreviewFarMeters: Float?
 }
 
 extension OutputProtection {
@@ -50,6 +53,7 @@ extension OutputProtection {
         case .normal: .stateCurrent
         case .inputLost: .videoInputStale
         case .trackingLost: .trackingProtection
+        case .poseUnaligned: .poseAlignmentUnavailable
         case .gpuOverload: .gpuProtection
         case .unknownColor: .unknownInputColor
         case .unsupportedFormat: .unsupportedInputFormat

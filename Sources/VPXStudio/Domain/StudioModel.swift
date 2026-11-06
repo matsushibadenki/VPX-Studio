@@ -49,14 +49,21 @@ enum StudioStatus {
 @MainActor @Observable
 final class StudioModel {
     var mode: StudioMode = .build {
-        didSet { if mode == .live || mode == .record { debugView = .composite } }
+        didSet {
+            if mode == .live || mode == .record {
+                guard calibrationIssue == nil else { mode = oldValue; return }
+                debugView = .composite
+            }
+        }
     }
     var selectedSourceName = ""
     private(set) var selectedSourceID: UUID?
 
     func selectSource(_ id: UUID) {
+        guard mode != .live, mode != .record, !isRecording else { return }
         guard let device = deviceRegistry.devices.first(where: { $0.id == id }),
               device.state == .connected, device.descriptor.capabilities.contains(.video) else { return }
+        cancelCheckerboardSolve()
         if isBenchmarkRunning, benchmarkSource?.descriptor.id != id {
             benchmarkSource?.stop()
             isBenchmarkRunning = false
@@ -85,10 +92,20 @@ final class StudioModel {
     var networkJitterMilliseconds = 0.0
     var clockDriftPartsPerMillion = 0.0
     var inputColorMetadata = ""
-    var isRecording = false
+    var isRecording = false {
+        didSet {
+            if isRecording && calibrationIssue != nil { isRecording = false }
+            if isRecording { debugView = .composite }
+        }
+    }
     var chromaKeyEnabled = false
     var chromaGreenThreshold: Float = 0.12
     var chromaGreenSoftness: Float = 0.20
+    var temporalMatteEnabled = false
+    var temporalMatteStrength: Float = 0.5
+    var temporalMatteMode: TemporalMattePolicy.Mode?
+    var depthPreviewFarMeters: Float = 10
+    var depthPreviewTelemetry: DepthPreviewTelemetry?
     var focalLengthMillimeters: Float = CameraRig.preview.lens.focalLengthMillimeters
     var radialDistortionK1: Float = CameraRig.preview.lens.radialDistortionK1
     var focusDistanceMeters: Float = 3
@@ -97,15 +114,61 @@ final class StudioModel {
     var debugView = CompositeDebugView.composite
     private(set) var scene = StudioScene.demo
     private(set) var cameraCalibration: CameraCalibration?
+    private(set) var calibrationProfile: CalibrationProfile?
+    private var calibrationReferenceInvalidated = false
+    private var invalidatedCalibrationRevisions: [UUID: Int] = [:]
+    private func invalidateCalibrationReference() {
+        calibrationReferenceInvalidated = true
+        if let profile = calibrationProfile {
+            invalidatedCalibrationRevisions[profile.id] = max(invalidatedCalibrationRevisions[profile.id] ?? 0, profile.revision)
+        }
+    }
+    var calibrationIssue: CalibrationProfile.Issue? {
+        guard let profile = calibrationProfile else { return .missing }
+        let frame = realtimeCore.latestVideoFrame.read()
+        let issue = profile.issue(now: Date(), sourceID: selectedSourceID,
+            width: frame.map { CVPixelBufferGetWidth($0.pixelBuffer) },
+            height: frame.map { CVPixelBufferGetHeight($0.pixelBuffer) },
+            referenceChanged: calibrationReferenceInvalidated || (selectedTrackingNodeID.flatMap { trackingReferences[$0]?.requiresReset } ?? false),
+            focusDistanceMeters: focusDistanceMeters,focalLengthMillimeters: focalLengthMillimeters)
+        if let issue { return issue }
+        if let nodeID = selectedTrackingNodeID {
+            guard let registration = profile.stageRegistration else { return .stageRegistrationMissing }
+            guard registration.matches(nodeID: nodeID, connectionID: captureConnections[nodeID],
+                referenceSpaceRevision: trackingReferences[nodeID]?.revision), registration.anchoredAt <= Date() else { return .referenceChanged }
+        }
+        return nil
+    }
     var assetImportError: String?
+    private(set) var isSolvingCheckerboard = false
+    private(set) var checkerboardError: CheckerboardError?
+    private var checkerboardGeneration = UUID()
+    private var checkerboardTask: Task<(CheckerboardObservation,CheckerboardSolution), Error>?
+    private func cancelCheckerboardSolve() {
+        checkerboardTask?.cancel(); checkerboardTask = nil
+        checkerboardGeneration = UUID(); isSolvingCheckerboard = false; checkerboardError = nil
+    }
+    var canSolveCheckerboard: Bool {
+        mode != .live && mode != .record && !isRecording && !isSolvingCheckerboard &&
+            selectedSourceID != nil && cameraCalibration != nil
+    }
     var outputProtection = OutputProtection.normal
     private var trackingTransforms: [UUID: simd_float4x4] = [:]
     private var trackingOrigins: [UUID: simd_float4x4] = [:]
     private var trackingReferences: [UUID: TrackingReferenceState] = [:]
+    private var poseMotionFilters: [UUID: PoseMotionFilter] = [:]
+    private var poseTimelines: [UUID: PoseTimeline] = [:]
+    var poseAlignmentTelemetry: PoseAlignmentTelemetry?
+    var poseRejectedCount: UInt64 = 0
+    var poseRejection: PoseMotionFilter.Rejection?
 
     func resetTrackingOrigin() {
-        guard mode != .live, mode != .record, let id = selectedTrackingNodeID else { return }
+        guard mode != .live, mode != .record, !isRecording, let id = selectedTrackingNodeID else { return }
+        cancelCheckerboardSolve()
+        if calibrationProfile != nil { invalidateCalibrationReference() }
         trackingReferences[id]?.reset()
+        poseMotionFilters.removeValue(forKey: id)
+        poseTimelines.removeValue(forKey: id)
         trackingOrigins.removeValue(forKey: id); trackingTransforms.removeValue(forKey: id)
         poseHealth.removeValue(forKey: id); poseJitterBuffers.removeValue(forKey: id)
         trackingQuality = .lost
@@ -120,7 +183,20 @@ final class StudioModel {
         settings.camera.calibration = cameraCalibration
         settings.camera.worldFromCamera = cameraCalibration?.transform ?? scene.cameraWorldTransform
         if let id = selectedTrackingNodeID, let pose = trackingTransforms[id], let origin = trackingOrigins[id] {
-            settings.camera.worldFromCamera *= simd_inverse(origin)*pose
+            let baseWorldFromCamera = settings.camera.worldFromCamera
+            var stageFromNode = baseWorldFromCamera * simd_inverse(origin)
+            if let registration = calibrationProfile?.stageRegistration,
+               registration.matches(nodeID: id, connectionID: captureConnections[id], referenceSpaceRevision: trackingReferences[id]?.revision),
+               !calibrationReferenceInvalidated, trackingReferences[id]?.requiresReset == false {
+                settings.camera.worldFromCamera = registration.transform * pose
+                stageFromNode = registration.transform
+            } else {
+                settings.camera.worldFromCamera *= simd_inverse(origin)*pose
+            }
+            if let timeline = poseTimelines[id] {
+                settings.poseAlignment = PoseCameraAlignment(sourceID: id,history: timeline,stageFromNodeWorld: stageFromNode,
+                    maximumAge: qualityProfile.poseTimeoutSeconds)
+            }
             // Calibration intrinsics remain active while extrinsics follow relative tracking.
             if var calibration = settings.camera.calibration {
                 let m = settings.camera.worldFromCamera
@@ -130,17 +206,26 @@ final class StudioModel {
         }
         settings.profile = qualityProfile; settings.inputEncoding = inputEncoding; settings.debugView = debugView
         settings.chromaEnabled = chromaKeyEnabled; settings.greenThreshold = chromaGreenThreshold; settings.greenSoftness = chromaGreenSoftness
+        settings.temporalMatteEnabled = temporalMatteEnabled; settings.temporalMatteStrength = temporalMatteStrength
+        settings.depthPreviewFarMeters = depthPreviewFarMeters
+        if let id = selectedSourceID,
+           ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id],now: DispatchTime.now().uptimeNanoseconds) == .current,
+           let buffer = captureDepthBuffers[id], let packet = buffer.latest, let time = buffer.captureHostNanoseconds {
+            settings.depthPreview = DepthPreviewInput(sourceID: id,packet: packet,capturedHostSeconds: time/1_000_000_000)
+        }
         let production = mode == .live || mode == .record
-        settings.trackingLost = production && selectedTrackingNodeID != nil && trackingQuality == .lost
-        settings.protectMissingInput = production
+        settings.requirePoseAlignment = (production || isRecording) && selectedTrackingNodeID != nil
+        settings.trackingLost = (production || isRecording) &&
+            (calibrationIssue != nil || (selectedTrackingNodeID != nil && trackingQuality == .lost))
+        settings.protectMissingInput = production || isRecording
         return settings
     }
 
     func loadScene(from url: URL) async {
-        guard mode != .live, mode != .record else { return }
+        guard mode != .live, mode != .record, !isRecording else { return }
         do {
             let loaded = try await Task.detached { try GLTFSceneLoader.load(url) }.value
-            guard mode != .live, mode != .record else { return }
+            guard mode != .live, mode != .record, !isRecording else { return }
             scene = loaded
             resetTrackingOrigin()
         }
@@ -148,22 +233,117 @@ final class StudioModel {
     }
 
     func loadCalibration(from url: URL) async {
-        guard mode != .live, mode != .record else { return }
+        guard mode != .live, mode != .record, !isRecording else { return }
+        cancelCheckerboardSolve()
         do {
-            let loaded = try await Task.detached { try CameraCalibration.load(url) }.value
-            guard mode != .live, mode != .record else { return }
+            let (loaded, profile) = try await Task.detached { try CalibrationProfile.loadCameraOrProfile(url) }.value
+            guard mode != .live, mode != .record, !isRecording else { return }
+            if profile?.stageRegistration == nil { resetTrackingOrigin() }
+            if let profile, profile.revision <= (invalidatedCalibrationRevisions[profile.id] ?? 0) {
+                throw StudioAssetError.invalid("calibration reference changed; provide a revalidated revision")
+            }
             cameraCalibration = loaded
+            calibrationProfile = profile
             focalLengthMillimeters = loaded.referenceFocalLengthMillimeters
             radialDistortionK1 = loaded.k1
-            resetTrackingOrigin()
+            if let focus = profile?.checkerboardMeasurement?.focusDistanceMeters { focusDistanceMeters = focus }
+            calibrationReferenceInvalidated = false
         }
         catch { assetImportError = error.localizedDescription }
     }
 
     func clearCalibration() {
-        guard mode != .live, mode != .record else { return }
-        cameraCalibration = nil
+        guard mode != .live, mode != .record, !isRecording else { return }
+        cancelCheckerboardSolve()
         resetTrackingOrigin()
+        cameraCalibration = nil
+        calibrationProfile = nil
+    }
+
+    func solveCheckerboard(from url: URL) async {
+        guard canSolveCheckerboard, let original = cameraCalibration, let sourceID = selectedSourceID else { return }
+        let originalProfile = calibrationProfile
+        let generation = UUID(); checkerboardGeneration = generation
+        isSolvingCheckerboard = true; checkerboardError = nil
+        defer { if checkerboardGeneration == generation { isSolvingCheckerboard = false; checkerboardTask = nil } }
+        do {
+            let task = Task.detached {
+                let observation = try CheckerboardObservation.load(url)
+                guard observation.cameraID == sourceID,
+                      originalProfile.map({ $0.lensID == observation.lensID }) ?? true else { throw CheckerboardError.intrinsicsMismatch }
+                if let originalProfile {
+                    guard originalProfile.validatedAt <= Date(), Date() < originalProfile.expiresAt else { throw CheckerboardError.intrinsicsExpired }
+                }
+                let solution = try CheckerboardSolver.solve(observation,intrinsics: original,now: Date())
+                return (observation,solution)
+            }
+            checkerboardTask = task
+            let (observation, solution) = try await task.value
+            guard checkerboardGeneration == generation, mode != .live, mode != .record, !isRecording,
+                  selectedSourceID == sourceID, cameraCalibration == original, calibrationProfile == originalProfile else { return }
+            guard observation.cameraID == sourceID else { throw CheckerboardError.intrinsicsMismatch }
+            let oldRevision = max(calibrationProfile?.revision ?? 0,
+                calibrationProfile.flatMap { invalidatedCalibrationRevisions[$0.id] } ?? 0)
+            guard oldRevision < Int.max else { throw CheckerboardError.invalidObservation }
+            let expiry = min(observation.expiresAt, originalProfile?.expiresAt ?? observation.expiresAt)
+            guard Date() < expiry else { throw CheckerboardError.intrinsicsExpired }
+            var profile = CalibrationProfile(id: calibrationProfile?.id ?? UUID(),revision: oldRevision+1,
+                camera: solution.camera,cameraID: sourceID,lensID: observation.lensID,
+                validatedAt: observation.measuredAt,expiresAt: expiry,
+                reprojectionRMSEPixels: solution.rmsePixels,sampleCount: observation.imagePoints.count)
+            profile.checkerboardMeasurement = solution.measurement
+            try profile.validate()
+            resetTrackingOrigin()
+            cameraCalibration = profile.camera; calibrationProfile = profile
+            if let focus = observation.focusDistanceMeters { focusDistanceMeters = focus }
+            calibrationReferenceInvalidated = false
+        } catch is CancellationError { return }
+        catch let error as CheckerboardError { if checkerboardGeneration == generation { checkerboardError = error } }
+        catch { if checkerboardGeneration == generation { checkerboardError = .invalidObservation } }
+    }
+
+    private var stageAnchorSnapshot: (node: UUID, connection: UUID, revision: UInt64, pose: simd_float4x4)? {
+        guard mode != .live, mode != .record, !isRecording, !isSolvingCheckerboard,
+              let profile = calibrationProfile, let node = selectedTrackingNodeID,
+              profile.cameraID == node, profile.revision < Int.max,
+              (invalidatedCalibrationRevisions[profile.id] ?? 0) < Int.max,
+              let connection = captureConnections[node], let reference = trackingReferences[node], !reference.requiresReset,
+              poseMotionFilters[node]?.lastRejection == nil,
+              captureQualityEvents[node]?.quality == .nominal,
+              let revision = reference.revision, let pose = trackingTransforms[node],
+              let frame = realtimeCore.latestVideoFrame.read(), frame.quality == .nominal else { return nil }
+        let now = DispatchTime.now().uptimeNanoseconds
+        guard profile.issue(now: Date(), sourceID: node, width: CVPixelBufferGetWidth(frame.pixelBuffer),
+                height: CVPixelBufferGetHeight(frame.pixelBuffer), referenceChanged: false,
+                focusDistanceMeters: focusDistanceMeters,focalLengthMillimeters: focalLengthMillimeters) == nil,
+              poseHealth[node]?.effectiveQuality(now: now,
+                clock: .evaluate(lastAccepted: clockLastAccepted[node], now: now), timeoutSeconds: 0.15) == .nominal,
+              StageAnchorTiming.accepts(videoHostSeconds: frame.telemetry.captured,
+                poseHostNanoseconds: poseHealth[node]?.capturedHostNanoseconds, now: now) else { return nil }
+        return (node, connection, revision, pose)
+    }
+
+    var canRegisterStage: Bool { stageAnchorSnapshot != nil }
+
+    /// Operator confirms that the camera is currently at the measured stage pose
+    /// stored in CameraCalibration. This is not automatic marker calibration.
+    func registerStage() {
+        guard let snapshot = stageAnchorSnapshot, var profile = calibrationProfile else { return }
+        do {
+            profile.stageRegistration = try StageRegistration.anchor(nodeID: snapshot.node, connectionID: snapshot.connection,
+                referenceSpaceRevision: snapshot.revision, stageFromCamera: profile.camera.transform,
+                nodeWorldFromCamera: snapshot.pose, now: Date())
+            profile.revision = max(profile.revision, invalidatedCalibrationRevisions[profile.id] ?? 0) + 1
+            try profile.validate()
+            calibrationProfile = profile
+            calibrationReferenceInvalidated = false
+        } catch { assetImportError = error.localizedDescription }
+    }
+
+    func saveCalibration(to url: URL) {
+        guard mode != .live, mode != .record, !isRecording, !isSolvingCheckerboard, let profile = calibrationProfile else { return }
+        do { try profile.save(to: url) }
+        catch { assetImportError = error.localizedDescription }
     }
 
     let realtimeCore = RealtimeCore()
@@ -312,6 +492,7 @@ final class StudioModel {
     }
 
     func stopPreview() {
+        cancelCheckerboardSolve()
         if isBenchmarkRunning {
             isBenchmarkRunning = false
             benchmarkResult?.status = .cancelled
@@ -351,8 +532,10 @@ final class StudioModel {
                         captureQualityEvents[nodeID]=event
                         var reference=trackingReferences[nodeID] ?? TrackingReferenceState()
                         reference.observe(event.referenceSpaceRevision); trackingReferences[nodeID]=reference
+                        if reference.requiresReset, calibrationProfile?.cameraID == nodeID { invalidateCalibrationReference() }
                         if event.quality == .lost || event.reason == .relocalizing {
-                            poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID)
+                            poseMotionFilters[nodeID]?.interruptReacquisition()
+                            poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
                             if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
                         }
                     }
@@ -363,7 +546,7 @@ final class StudioModel {
                     guard let self, captureConnections[nodeID] == connectionID else { return }
                     clockSyncTasks[nodeID]?.cancel(); clockSyncTasks.removeValue(forKey: nodeID)
                     clockLastAccepted.removeValue(forKey: nodeID); clockStatistics.removeValue(forKey: nodeID)
-                    poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID)
+                    poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
                     captureDepthBuffers.removeValue(forKey: nodeID); captureConnections.removeValue(forKey: nodeID)
                     let previous=captureQualityEvents[nodeID]
                     // No Node timestamp exists for a Host-observed disconnect.
@@ -408,6 +591,8 @@ final class StudioModel {
         captureDepthBuffers.removeAll(); captureQualityEvents.removeAll()
         captureConnections.removeAll()
         poseHealth.removeAll()
+        poseMotionFilters.removeAll()
+        poseTimelines.removeAll()
         trackingTransforms.removeAll(); trackingOrigins.removeAll(); trackingReferences.removeAll()
         selectedTrackingNodeID = nil
         trackingQuality = .lost
@@ -451,6 +636,8 @@ final class StudioModel {
         realtimeCore.metrics.sampleMemory()
         let now = DispatchTime.now().uptimeNanoseconds
         if let id = selectedTrackingNodeID {
+            poseRejectedCount = poseMotionFilters[id]?.rejectedCount ?? 0
+            poseRejection = poseMotionFilters[id]?.lastRejection
             if ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id], now: now) == .current,
                captureDepthBuffers[id]?.current(hostNow: now) != nil {
                 depthConfidencePercent=captureDepthBuffers[id].map { $0.highConfidenceFraction*100 }
@@ -462,11 +649,15 @@ final class StudioModel {
                 timeoutSeconds: qualityProfile.poseTimeoutSeconds)
             poseCaptureAgeMilliseconds = poseHealth[id]?.captureAgeMilliseconds(now: now)
         } else {
+            poseRejectedCount = 0; poseRejection = nil
             trackingQuality = .lost
             poseCaptureAgeMilliseconds = nil
             depthConfidencePercent=nil; clockUncertaintyMilliseconds=nil; trackingReason=nil
         }
         let metrics = realtimeCore.metrics.read()
+        poseAlignmentTelemetry = metrics.poseAlignment
+        temporalMatteMode = metrics.temporalMatteMode
+        depthPreviewTelemetry = metrics.depthPreview
         pipelineMeasurements = metrics.pipeline
         inputFormatMeasurements = metrics.inputFormats
         gpuDeadlineMissCount = metrics.gpuDeadlineMisses
@@ -521,7 +712,9 @@ final class StudioModel {
                     depthHighConfidenceFraction: captureDepthBuffers[id].flatMap {
                         var buffer=$0
                         return buffer.current(hostNow: now) == nil ? nil : buffer.highConfidenceFraction
-                    })
+                    },
+                    poseRejectedCount: poseMotionFilters[id]?.rejectedCount,
+                    poseRejection: poseMotionFilters[id]?.lastRejection?.rawValue)
             },
             events: diagnosticEvents.events,
             discardedEventCount: diagnosticEvents.discardedEventCount,
@@ -532,7 +725,10 @@ final class StudioModel {
                 radialDistortionK1: radialDistortionK1,
                 cameraWorldFromCamera: (0..<4).flatMap { [cameraTransform[$0].x,cameraTransform[$0].y,cameraTransform[$0].z,cameraTransform[$0].w] },
                 focusDistanceMeters: focusDistanceMeters,
-                chromaEnabled: chromaKeyEnabled,greenThreshold: chromaGreenThreshold,greenSoftness: chromaGreenSoftness)
+                chromaEnabled: chromaKeyEnabled,greenThreshold: chromaGreenThreshold,greenSoftness: chromaGreenSoftness,
+                temporalMatteEnabled: temporalMatteEnabled,temporalMatteStrength: temporalMatteStrength,
+                depthPreviewFarMeters: depthPreviewFarMeters),
+            calibrationProfile: calibrationProfile, calibrationIssue: calibrationIssue
         )
     }
 
@@ -614,6 +810,7 @@ final class StudioModel {
     }
 
     private func startClockSync(for nodeID: UUID, channel: CaptureSecureChannel) {
+        if calibrationProfile?.cameraID == nodeID { invalidateCalibrationReference() }
         clockSyncTasks[nodeID]?.cancel()
         let now = DispatchTime.now().uptimeNanoseconds
         diagnosticEvents.observe(stream: .clock, nodeID: nodeID, state: ClockFreshness.unmeasured.rawValue, hostTime: now)
@@ -622,8 +819,10 @@ final class StudioModel {
         clockLastAccepted.removeValue(forKey: nodeID)
         clockStatistics.removeValue(forKey: nodeID)
         clockSynchronizers.removeValue(forKey: nodeID)
+        poseMotionFilters.removeValue(forKey: nodeID)
+        poseTimelines.removeValue(forKey: nodeID)
         poseJitterBuffers.removeValue(forKey: nodeID)
-        poseHealth.removeValue(forKey: nodeID)
+        poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
         trackingTransforms.removeValue(forKey: nodeID); trackingOrigins.removeValue(forKey: nodeID); trackingReferences.removeValue(forKey: nodeID)
         clockSyncTasks[nodeID] = Task { [weak channel] in
             while !Task.isCancelled {
@@ -642,6 +841,8 @@ final class StudioModel {
         clockSynchronizers[nodeID] = synchronizer
         guard result.wasAccepted else { return }
         guard CaptureSynchronizationPolicy().accepts(result.statistics) else {
+            poseTimelines.removeValue(forKey: nodeID)
+            poseMotionFilters[nodeID]?.interruptReacquisition()
             clockLastAccepted.removeValue(forKey: nodeID)
             captureNodeSources[nodeID]?.resetClockModel()
             poseJitterBuffers.removeValue(forKey: nodeID); captureDepthBuffers.removeValue(forKey: nodeID)
@@ -665,14 +866,16 @@ final class StudioModel {
         reference.observe(pose.referenceSpaceRevision)
         trackingReferences[nodeID] = reference
         if reference.requiresReset {
-            poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID)
+            if calibrationProfile?.cameraID == nodeID { invalidateCalibrationReference() }
+            poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
             if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
             return
         }
         guard ClockFreshness.evaluate(lastAccepted: clockLastAccepted[nodeID], now: DispatchTime.now().uptimeNanoseconds) == .current,
               let statistics = clockStatistics[nodeID] else {
+            poseMotionFilters[nodeID]?.interruptReacquisition()
             poseJitterBuffers.removeValue(forKey: nodeID)
-            poseHealth.removeValue(forKey: nodeID)
+            poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
             if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
             return
         }
@@ -687,6 +890,13 @@ final class StudioModel {
             referenceHostNanoseconds: statistics.referenceHostNanoseconds
         )
         if let ready = buffer.dequeueLatestReady(hostNowNanoseconds: DispatchTime.now().uptimeNanoseconds) {
+            var filter = poseMotionFilters[nodeID] ?? PoseMotionFilter()
+            let measurement = filter.accept(ready)
+            poseMotionFilters[nodeID] = filter
+            guard let measurement else {
+                poseJitterBuffers[nodeID] = buffer
+                return
+            }
             let t = ready.translationMeters, r = ready.rotationQuaternion
             let rotationLength = r.count == 4 ? simd_length(SIMD4(r[0],r[1],r[2],r[3])) : 0
             let validPose = t.count == 3 && r.count == 4 && (t+r).allSatisfy(\.isFinite) && rotationLength.isFinite && rotationLength > 0.001
@@ -697,8 +907,12 @@ final class StudioModel {
                     referenceHost: statistics.referenceHostNanoseconds))
             if selectedTrackingNodeID == nodeID { trackingQuality = quality }
             if quality != .lost, validPose {
-                var transform = simd_float4x4(simd_quatf(vector: simd_normalize(SIMD4(r[0],r[1],r[2],r[3]))))
-                transform.columns.3 = SIMD4(t[0],t[1],t[2],1)
+                let transform = measurement.transform
+                if let time = poseHealth[nodeID]?.capturedHostNanoseconds {
+                    var timeline = poseTimelines[nodeID] ?? PoseTimeline()
+                    timeline.append(time: time/1_000_000_000,transform: transform,nominal: quality == .nominal)
+                    poseTimelines[nodeID] = timeline
+                }
                 trackingTransforms[nodeID] = transform
                 if trackingOrigins[nodeID] == nil { trackingOrigins[nodeID] = transform }
             }

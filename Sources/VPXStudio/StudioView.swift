@@ -65,6 +65,7 @@ struct StudioView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .help(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady))
             Spacer(minLength: 16)
             Button { showsDiagnostics = true } label: {
                 Image(systemName: "waveform.path.ecg")
@@ -100,6 +101,8 @@ struct StudioView: View {
                 studio.isRecording.toggle()
             }
             .tint(studio.isRecording ? .red : .accentColor)
+            .disabled(!studio.isRecording && studio.calibrationIssue != nil)
+            .help(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady))
         }
         .padding(.bottom, 12)
     }
@@ -233,11 +236,70 @@ struct StudioView: View {
                 Text(localization.text(.scenePass)).tag(CompositeDebugView.scene)
                 Text(localization.text(.videoPass)).tag(CompositeDebugView.video)
                 Text(localization.text(.mattePass)).tag(CompositeDebugView.matte)
-            }.disabled(isProduction)
-            Button(localization.text(.loadCalibration),systemImage: "camera.metering.matrix") { chooseAsset(isScene: false) }
-                .disabled(isProduction)
+                Text(localization.text(.depthPass)).tag(CompositeDebugView.depth)
+                Text(localization.text(.depthConfidencePass)).tag(CompositeDebugView.depthConfidence)
+            }
+            .labelsHidden()
+            .accessibilityLabel(localization.text(.debugPass))
+            .help(localization.text(.debugPass))
+            .disabled(isProduction)
+            if studio.debugView == .depth || studio.debugView == .depthConfidence {
+                HStack {
+                    Image(systemName: "info.circle")
+                        .help(localization.text(.depthPreviewHelp))
+                        .accessibilityLabel(localization.text(.depthPreviewHelp))
+                    if let depth = studio.depthPreviewTelemetry, depth.available {
+                        Text("\(depth.width ?? 0) × \(depth.height ?? 0)").font(.caption.monospacedDigit())
+                    } else {
+                        Text(localization.text(.depthPreviewMissing)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if studio.debugView == .depth {
+                    chromaControl(localization.text(.depthPreviewFar),value: $studio.depthPreviewFarMeters,range: 0.5...20)
+                        .disabled(isProduction)
+                }
+                if let age = studio.depthPreviewTelemetry?.ageMilliseconds {
+                    metric(localization.text(.depthPreviewAge),String(format: "%.1f ms",age))
+                }
+            }
+            HStack {
+                Button(localization.text(.loadCalibration),systemImage: "camera.metering.matrix") { chooseAsset(isScene: false) }
+                    .disabled(isProduction)
+                Button {
+                    guard let id = studio.selectedSourceID else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(id.uuidString, forType: .string)
+                } label: { Image(systemName: "doc.on.doc") }
+                .disabled(studio.selectedSourceID == nil)
+                .help(localization.text(.copyCameraID))
+                .accessibilityLabel(localization.text(.copyCameraID))
+            }
             Button(localization.text(.resetTrackingOrigin),systemImage: "scope") { studio.resetTrackingOrigin() }
                 .disabled(isProduction)
+            HStack {
+                Button(localization.text(.solveCheckerboard),systemImage: "checkerboard.rectangle") { chooseCheckerboard() }
+                    .disabled(!studio.canSolveCheckerboard)
+                Image(systemName: "info.circle")
+                    .help(localization.text(.checkerboardHelp))
+                    .accessibilityLabel(localization.text(.checkerboardHelp))
+            }
+            if studio.isSolvingCheckerboard {
+                ProgressView(localization.text(.checkerboardSolving)).controlSize(.small)
+            }
+            if let error = studio.checkerboardError {
+                Text(localization.text(error.localizationKey)).font(.caption).foregroundStyle(.orange)
+            }
+            HStack {
+                Button(localization.text(.registerStage), systemImage: "viewfinder") { studio.registerStage() }
+                    .disabled(!studio.canRegisterStage)
+                Image(systemName: "info.circle")
+                    .help(localization.text(.registerStageHelp))
+                    .accessibilityLabel(localization.text(.registerStageHelp))
+                Button { saveCalibration() } label: { Image(systemName: "square.and.arrow.up") }
+                    .disabled(studio.calibrationProfile == nil || isProduction || studio.isSolvingCheckerboard)
+                    .help(localization.text(.saveCalibration))
+                    .accessibilityLabel(localization.text(.saveCalibration))
+            }
             if let calibration = studio.cameraCalibration {
                 HStack {
                     Text(calibration.name).font(.caption).lineLimit(1).help(calibration.name)
@@ -246,10 +308,44 @@ struct StudioView: View {
                         .disabled(isProduction)
                 }
             }
+            Label(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady),
+                  systemImage: studio.calibrationIssue == nil ? "checkmark.shield" : "exclamationmark.shield")
+                .font(.caption).foregroundStyle(studio.calibrationIssue == nil ? Color.green : Color.orange)
+            if let profile = studio.calibrationProfile {
+                if let measurement = profile.checkerboardMeasurement {
+                    Label(localization.text(.checkerboardMeasured),systemImage: "checkerboard.rectangle")
+                        .font(.caption)
+                    metric(localization.text(.checkerboardMaximumResidual),String(format: "%.2f px",measurement.maximumResidualPixels))
+                }
+                if let registration = profile.stageRegistration {
+                    metric(localization.text(.stageAnchoredAt), registration.anchoredAt.formatted(date: .abbreviated, time: .shortened))
+                }
+                metric(localization.text(.calibrationRMSE), String(format: "%.2f px", profile.reprojectionRMSEPixels))
+                metric(localization.text(.calibrationValidated), profile.validatedAt.formatted(date: .abbreviated, time: .shortened))
+            }
             chromaControl(localization.text(.focusDistance),value: $studio.focusDistanceMeters,range: 0.1...20)
                 .disabled(studio.cameraCalibration?.breathing.isEmpty != false || isProduction)
             metric(localization.text(.renderer), studio.rendererStatus.text(localization))
             metric(localization.text(.tracking), localization.text(trackingQualityKey))
+            metric(localization.text(.poseRejected), String(studio.poseRejectedCount))
+            if let alignment = studio.poseAlignmentTelemetry {
+                metric(localization.text(.poseAlignment), localization.text(alignment.mode.localizationKey))
+                if let horizon = alignment.horizonMilliseconds {
+                    metric(localization.text(.posePredictionHorizon), String(format: "%.1f ms", horizon))
+                }
+                if let error = alignment.predictionErrorMeters {
+                    metric(localization.text(.posePredictionPositionError), String(format: "%.2f mm", error*1000))
+                }
+                if let error = alignment.predictionErrorRadians {
+                    metric(localization.text(.posePredictionRotationError), String(format: "%.3f°", error*180 / .pi))
+                }
+            }
+            if let rejection = studio.poseRejection {
+                Image(systemName: "waveform.path.badge.minus")
+                    .foregroundStyle(.orange)
+                    .help(localization.text(rejection.localizationKey))
+                    .accessibilityLabel(localization.text(rejection.localizationKey))
+            }
             metric(localization.text(.frameRate), String(format: "%.1f fps", studio.frameRate))
             metric(localization.text(.latency), String(format: "%.1f ms", studio.latencyMilliseconds))
             metric(localization.text(.clockOffset), String(format: "%.2f ms", studio.clockOffsetMilliseconds))
@@ -286,6 +382,20 @@ struct StudioView: View {
                 range: 0.01...0.45
             )
             .disabled(!studio.chromaKeyEnabled)
+            HStack {
+                Toggle(localization.text(.temporalMatte), isOn: $studio.temporalMatteEnabled)
+                    .disabled(!studio.chromaKeyEnabled || isProduction)
+                Image(systemName: "info.circle")
+                    .help(localization.text(.temporalMatteHelp))
+                    .accessibilityLabel(localization.text(.temporalMatteHelp))
+            }
+            if studio.temporalMatteEnabled {
+                chromaControl(localization.text(.temporalMatteStrength), value: $studio.temporalMatteStrength, range: 0...0.8)
+                    .disabled(!studio.chromaKeyEnabled || isProduction)
+                if let mode = studio.temporalMatteMode {
+                    Text(localization.text(mode.localizationKey)).font(.caption).foregroundStyle(.secondary)
+                }
+            }
             focalLengthControl
                 .disabled(studio.cameraCalibration != nil || isProduction)
             radialDistortionControl
@@ -322,7 +432,7 @@ struct StudioView: View {
         }
     }
 
-    private var isProduction: Bool { studio.mode == .live || studio.mode == .record }
+    private var isProduction: Bool { studio.mode == .live || studio.mode == .record || studio.isRecording }
 
     private func chooseAsset(isScene: Bool) {
         let panel = NSOpenPanel()
@@ -336,6 +446,27 @@ struct StudioView: View {
                 if isScene { await studio.loadScene(from: url) }
                 else { await studio.loadCalibration(from: url) }
             }
+        }
+    }
+
+    private func saveCalibration() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "CalibrationProfile.json"
+        panel.title = localization.text(.saveCalibration)
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            studio.saveCalibration(to: url)
+        }
+    }
+
+    private func chooseCheckerboard() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]; panel.allowsMultipleSelection = false; panel.canChooseDirectories = false
+        panel.title = localization.text(.solveCheckerboard)
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { await studio.solveCheckerboard(from: url) }
         }
     }
 

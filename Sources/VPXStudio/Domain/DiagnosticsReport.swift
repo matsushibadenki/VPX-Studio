@@ -3,7 +3,7 @@ import Metal
 
 /// Point-in-time measurements; not an end-to-end latency benchmark.
 struct DiagnosticsReport: Codable {
-    static let currentSchemaVersion = 6
+    static let currentSchemaVersion = 13
     let schemaVersion: Int
     let capturedAt: Date
     let configuration: ProjectConfiguration
@@ -19,6 +19,8 @@ struct DiagnosticsReport: Codable {
     var benchmark: BenchmarkResult? = nil
     var environment = DiagnosticsEnvironment.current
     var renderConfiguration: RenderConfiguration?
+    var calibrationProfile: CalibrationProfile?
+    var calibrationIssue: CalibrationProfile.Issue?
 
     struct NodeClock: Codable {
         let nodeID: UUID
@@ -34,6 +36,8 @@ struct DiagnosticsReport: Codable {
         var clockUncertaintyMilliseconds: Double? = nil
         var trackingReason: String? = nil
         var depthHighConfidenceFraction: Double? = nil
+        var poseRejectedCount: UInt64? = nil
+        var poseRejection: String? = nil
     }
 
     func save(to url: URL) throws {

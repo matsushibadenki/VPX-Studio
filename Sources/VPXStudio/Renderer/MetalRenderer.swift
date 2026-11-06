@@ -24,10 +24,12 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable else { return }
-        let now = CACurrentMediaTime(), frame = latestVideoFrame.read()
+        let now = CACurrentMediaTime(), snapshot = latestVideoFrame.readSnapshot()
+        let frame = snapshot.frame
         let settings = settingsLock.withLock { storedSettings }
         do {
-            let command = try pipeline.encode(frame: frame,target: drawable.texture,settings: settings,metrics: metrics,now: now)
+            let command = try pipeline.encode(frame: frame,target: drawable.texture,settings: settings,metrics: metrics,now: now,
+                frameSourceID: snapshot.sourceID)
             command.present(drawable)
             let captured = metrics.read().protection == .normal ? frame?.telemetry.captured : nil
             drawable.addPresentedHandler { [metrics] drawable in

@@ -10,8 +10,14 @@ struct StudioRenderSettings: Sendable {
     var chromaEnabled = false
     var greenThreshold: Float = 0.12
     var greenSoftness: Float = 0.2
+    var temporalMatteEnabled = false
+    var temporalMatteStrength: Float = 0.5
     var trackingLost = false
     var protectMissingInput = false
+    var poseAlignment: PoseCameraAlignment?
+    var requirePoseAlignment = false
+    var depthPreview: DepthPreviewInput?
+    var depthPreviewFarMeters: Float = 10
 }
 
 private struct VideoParameters {
@@ -64,10 +70,15 @@ final class MetalFramePipeline {
     private let sceneFence: MTLFence
     private let textureCache: CVMetalTextureCache
     private let fallback: MTLTexture
+    private let depthConfidenceFallback: MTLTexture
     private var sceneTexture: MTLTexture?
     private var sceneDepth: MTLTexture?
     private var videoTexture: MTLTexture?
     private var matteTexture: MTLTexture?
+    private var historyVideoTexture: MTLTexture?
+    private var historyMatteTexture: MTLTexture?
+    private var matteHistoryPolicy = TemporalMattePolicy()
+    private lazy var depthPreviewCache = DepthPreviewTextureCache(device: device)
     private var shadowTexture: MTLTexture?
     private var meshes: [GPUMesh] = []
     private var sceneID: UUID?
@@ -111,11 +122,18 @@ final class MetalFramePipeline {
         descriptor.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw StudioAssetError.invalid("fallback texture") }
         fallback = texture
+        let confidenceDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Uint,width: 1,height: 1,mipmapped: false)
+        confidenceDescriptor.storageMode = .shared; confidenceDescriptor.usage = [.shaderRead]
+        guard let confidenceFallback = device.makeTexture(descriptor: confidenceDescriptor) else { throw StudioAssetError.invalid("depth confidence fallback") }
+        depthConfidenceFallback = confidenceFallback
+        var zeroConfidence: UInt8 = 0
+        confidenceFallback.replace(region: MTLRegionMake2D(0,0,1,1),mipmapLevel: 0,withBytes: &zeroConfidence,bytesPerRow: 1)
         var zero: UInt32 = 0
         texture.replace(region: MTLRegionMake2D(0,0,1,1), mipmapLevel: 0, withBytes: &zero, bytesPerRow: 4)
         for pass in [FramePass(name: "normalize", dependsOn: []), FramePass(name: "matte", dependsOn: ["normalize"]),
                      FramePass(name: "shadow", dependsOn: []), FramePass(name: "scene", dependsOn: ["shadow"]),
-                     FramePass(name: "composite", dependsOn: ["scene","matte"])] { try frameGraph.register(pass) }
+                     FramePass(name: "composite", dependsOn: ["scene","matte"]),
+                     FramePass(name: "matteHistory", dependsOn: ["composite"])] { try frameGraph.register(pass) }
         _ = try frameGraph.orderedPasses()
     }
 
@@ -176,9 +194,56 @@ final class MetalFramePipeline {
     }
 
     /// Returns an uncommitted final command buffer. The caller may attach a drawable before commit.
-    func encode(frame: VideoFrame?, target: MTLTexture, settings: StudioRenderSettings,
-                metrics: RealtimeMetricsStore, now: Double) throws -> MTLCommandBuffer {
+    func encode(frame: VideoFrame?, target: MTLTexture, settings inputSettings: StudioRenderSettings,
+                metrics: RealtimeMetricsStore, now: Double, frameSourceID: UUID? = nil) throws -> MTLCommandBuffer {
+        var resolvedSettings = inputSettings
+        let aligned = inputSettings.poseAlignment.flatMap { alignment in
+            alignment.sourceID == frameSourceID ? alignment.resolve(videoCaptureTime: frame?.telemetry.captured,now: now) : nil
+        }
+        let unaligned = inputSettings.requirePoseAlignment && aligned == nil
+        if let aligned {
+            resolvedSettings.camera.worldFromCamera = aligned.transform
+            if var calibration = resolvedSettings.camera.calibration {
+                calibration.worldFromCamera = (0..<4).flatMap { [aligned.transform[$0].x,aligned.transform[$0].y,aligned.transform[$0].z,aligned.transform[$0].w] }
+                resolvedSettings.camera.calibration = calibration
+            }
+        }
+        let settings = resolvedSettings
+        let debugView = settings.protectMissingInput ? CompositeDebugView.composite : settings.debugView
+        let showDepth = debugView == .depth || debugView == .depthConfidence
+        let depthTextures: DepthPreviewTextureCache.Textures?
+        if showDepth {
+            depthTextures = try depthPreviewCache.textures(for: settings.depthPreview,sourceID: frameSourceID,now: now)
+        } else { depthPreviewCache.clear(); depthTextures = nil }
+        if showDepth {
+            let input = settings.depthPreview.flatMap { $0.sourceID == frameSourceID ? $0 : nil }
+            metrics.recordDepthPreview(DepthPreviewTelemetry(available: depthTextures != nil,
+                width: input.map { Int($0.packet.header.width) },height: input.map { Int($0.packet.header.height) },
+                ageMilliseconds: input.flatMap { $0.capturedHostSeconds.isFinite && now.isFinite ? (now-$0.capturedHostSeconds)*1000 : nil }))
+        } else { metrics.recordDepthPreview(nil) }
+        let alignmentTelemetry = settings.poseAlignment.map { alignment in
+            PoseAlignmentTelemetry(mode: aligned.flatMap { .init(rawValue: $0.mode.rawValue) } ?? .unavailable,
+                horizonMilliseconds: aligned?.horizonMilliseconds,
+                predictionErrorMeters: alignment.history.predictionErrorMeters,
+                predictionErrorRadians: alignment.history.predictionErrorRadians,
+                predictionErrorHorizonMilliseconds: alignment.history.predictionErrorHorizonMilliseconds)
+        }
+        metrics.recordPoseAlignment(alignmentTelemetry ?? (settings.requirePoseAlignment
+            ? PoseAlignmentTelemetry(mode: .unavailable,horizonMilliseconds: nil,predictionErrorMeters: nil,
+                predictionErrorRadians: nil,predictionErrorHorizonMilliseconds: nil) : nil))
         try prepare(width: target.width, height: target.height, scene: settings.scene)
+        let wantsMatteHistory = settings.temporalMatteEnabled && settings.chromaEnabled &&
+            settings.temporalMatteStrength > 0 && settings.temporalMatteStrength <= 0.8
+        if wantsMatteHistory {
+            if historyVideoTexture?.width != target.width || historyVideoTexture?.height != target.height {
+                let video = try texture(.rgba16Float,width: target.width,height: target.height,usage: [.shaderRead])
+                let matte = try texture(.r16Float,width: target.width,height: target.height,usage: [.shaderRead])
+                historyVideoTexture = video; historyMatteTexture = matte
+                matteHistoryPolicy.reset()
+            }
+        } else {
+            historyVideoTexture = nil; historyMatteTexture = nil; matteHistoryPolicy.reset()
+        }
         guard let sceneTexture, let sceneDepth, let videoTexture, let matteTexture, let shadowTexture,
               let conversion = queue.makeCommandBuffer(), let command = queue.makeCommandBuffer() else { throw StudioAssetError.invalid("frame resources") }
         let age = frame.map { now - CMTimeGetSeconds($0.hostReceiveTime) }
@@ -190,7 +255,7 @@ final class MetalFramePipeline {
         let encoding = frame.flatMap { settings.inputEncoding.resolved(for: $0.colorMetadata) }
         let gpuProtected = metrics.read().gpuProtected
         let protection: OutputProtection = gpuProtected ? .gpuOverload : settings.trackingLost ? .trackingLost :
-            !active ? .inputLost : imported == nil ? .unsupportedFormat : encoding == nil ? .unknownColor : .normal
+            !active ? .inputLost : unaligned ? .poseUnaligned : imported == nil ? .unsupportedFormat : encoding == nil ? .unknownColor : .normal
         metrics.recordProtection(protection)
         let hasVideo = protection == .normal
         let format = frame.map { String(CVPixelBufferGetPixelFormatType($0.pixelBuffer), radix: 16) } ?? "none"
@@ -214,6 +279,16 @@ final class MetalFramePipeline {
             if frame?.colorMetadata.yCbCrMatrix == "ITU_R_601_4" { videoParams.matrix.x = 0.299; videoParams.matrix.y = 0.114 }
             if frame?.colorMetadata.yCbCrMatrix == "ITU_R_2020" { videoParams.matrix.x = 0.2627; videoParams.matrix.y = 0.0593 }
         }
+        let normalization = [videoParams.distortion,videoParams.intrinsics,videoParams.options,videoParams.range,videoParams.matrix]
+            .flatMap { [$0.x,$0.y,$0.z,$0.w] } + [settings.greenThreshold,settings.greenSoftness,settings.temporalMatteStrength,
+                Float(frame.map { CVPixelBufferGetWidth($0.pixelBuffer) } ?? 0),Float(frame.map { CVPixelBufferGetHeight($0.pixelBuffer) } ?? 0)]
+        let historyKey = frameSourceID.map { TemporalMattePolicy.Key(sourceID: $0,width: target.width,height: target.height,
+            pixelFormat: frame.map { CVPixelBufferGetPixelFormatType($0.pixelBuffer) } ?? 0,normalization: normalization,
+            quality: frame?.quality ?? .lost) }
+        var nextMattePolicy = matteHistoryPolicy
+        let historyMode = nextMattePolicy.next(key: historyKey,sequence: frame?.identifier,captureTime: frame?.telemetry.captured,
+            enabled: wantsMatteHistory && hasVideo)
+        metrics.recordTemporalMatte(historyMode)
         guard let normalizeEncoder = conversion.makeComputeCommandEncoder() else { throw StudioAssetError.invalid("normalize encoder") }
         normalizeEncoder.label = "Normalize + lens undistort + SDR decode"
         normalizeEncoder.setComputePipelineState(normalize)
@@ -281,8 +356,13 @@ final class MetalFramePipeline {
                 e.label = "Explicit alpha matte"
                 e.setComputePipelineState(mattePipeline)
                 e.setTexture(videoTexture,index: 0); e.setTexture(matteTexture,index: 1)
+                e.setTexture(historyVideoTexture ?? fallback,index: 2)
+                e.setTexture(historyMatteTexture ?? fallback,index: 3)
                 var key = SIMD4<Float>(settings.chromaEnabled ? 1 : 0,settings.greenThreshold,settings.greenSoftness,0)
                 e.setBytes(&key,length: MemoryLayout<SIMD4<Float>>.stride,index: 0)
+                var temporal = SIMD4<Float>(settings.temporalMatteStrength,0.08,0.25,
+                    historyMode == .reuse ? 2 : historyMode == .blend ? 1 : 0)
+                e.setBytes(&temporal,length: MemoryLayout<SIMD4<Float>>.stride,index: 1)
                 dispatch(e,pipeline: mattePipeline,width: target.width,height: target.height)
                 e.updateFence(matteFence); e.endEncoding()
             case "composite":
@@ -293,10 +373,28 @@ final class MetalFramePipeline {
                 e.waitForFence(sceneFence,before: .fragment); e.waitForFence(matteFence,before: .fragment)
                 e.setRenderPipelineState(compositePipeline)
                 e.setFragmentTexture(sceneTexture,index: 0); e.setFragmentTexture(videoTexture,index: 1); e.setFragmentTexture(matteTexture,index: 2)
-                let mode = CompositeDebugView.allCases.firstIndex(of: settings.debugView) ?? 0
-                var options = SIMD4<Float>(Float(mode),blockOutput ? 1 : 0,settings.chromaEnabled ? 1 : 0,0)
+                e.setFragmentTexture(depthTextures?.depth ?? fallback,index: 3)
+                // Integer textures require a matching integer fallback.
+                e.setFragmentTexture(depthTextures?.confidence ?? depthConfidenceFallback,index: 4)
+                let mode = CompositeDebugView.allCases.firstIndex(of: debugView) ?? 0
+                var options = SIMD4<Float>(Float(mode),blockOutput ? 1 : 0,settings.chromaEnabled ? 1 : 0,depthTextures == nil ? 0 : 1)
                 e.setFragmentBytes(&options,length: MemoryLayout<SIMD4<Float>>.stride,index: 0)
+                var depthParameters = SIMD4<Float>(settings.depthPreviewFarMeters.isFinite ? max(0.5,min(20,settings.depthPreviewFarMeters)) : 10,
+                    Float(target.width)/Float(target.height),0,0)
+                e.setFragmentBytes(&depthParameters,length: MemoryLayout<SIMD4<Float>>.stride,index: 1)
                 e.drawPrimitives(type: .triangle,vertexStart: 0,vertexCount: 3); e.endEncoding()
+            case "matteHistory":
+                if historyMode == .reset || historyMode == .blend {
+                    guard let historyVideoTexture, let historyMatteTexture,
+                          let encoder = command.makeBlitCommandEncoder() else {
+                        matteHistoryPolicy.reset(); throw StudioAssetError.invalid("matte history encoder")
+                    }
+                    encoder.label = "Retain previous video and matte on GPU"
+                    encoder.waitForFence(matteFence)
+                    encoder.copy(from: videoTexture,to: historyVideoTexture)
+                    encoder.copy(from: matteTexture,to: historyMatteTexture)
+                    encoder.endEncoding()
+                }
             default: break // Normalize is encoded in its isolated timing command buffer.
             }
         }
@@ -304,6 +402,7 @@ final class MetalFramePipeline {
         command.addCompletedHandler { completed in
             metrics.recordGPUCompletion(start: timing.buffer.gpuStartTime,end: completed.gpuEndTime,budget: settings.profile.gpuBudgetMilliseconds)
         }
+        matteHistoryPolicy = nextMattePolicy
         return command
     }
 

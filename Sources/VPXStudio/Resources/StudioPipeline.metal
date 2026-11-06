@@ -32,12 +32,26 @@ kernel void normalizeCamera(texture2d<float,access::sample> first [[texture(0)]]
     output.write(float4(decodeSDR(rgb,uint(p.options.y)), p.options.z*(inBounds ? 1.0 : 0.0)),gid);
 }
 kernel void buildMatte(texture2d<float,access::read> video [[texture(0)]],
-    texture2d<float,access::write> matte [[texture(1)]], constant float4& key [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    texture2d<float,access::write> matte [[texture(1)]],
+    texture2d<float,access::read> previousVideo [[texture(2)]],
+    texture2d<float,access::read> previousMatte [[texture(3)]],
+    constant float4& key [[buffer(0)]], constant float4& temporal [[buffer(1)]], uint2 gid [[thread_position_in_grid]]) {
     if (gid.x >= matte.get_width() || gid.y >= matte.get_height()) return;
     float4 color=video.read(gid);
     float dominance=color.g-max(color.r,color.b);
     float strength=smoothstep(key.y,key.y+max(key.z,0.001),dominance);
-    matte.write(float4(color.a*(1-key.x*strength)),gid);
+    float alpha=color.a*(1-key.x*strength);
+    if (temporal.w > 1.5) {
+        // Drawing the same captured frame again must not advance the filter.
+        alpha=previousMatte.read(gid).r;
+    } else if (temporal.w > 0.5 && alpha > 0.05 && alpha < 0.95) {
+        float3 difference=abs(color.rgb-previousVideo.read(gid).rgb);
+        float change=max(difference.r,max(difference.g,difference.b));
+        float prior=previousMatte.read(gid).r;
+        float confidence=(1-smoothstep(0.04,temporal.y,change))*(1-smoothstep(0.1,temporal.z,abs(alpha-prior)));
+        alpha=mix(alpha,prior,clamp(temporal.x,0.0,0.8)*confidence);
+    }
+    matte.write(float4(alpha),gid);
 }
 struct SceneVertex { float4 position; float4 normal; };
 struct SceneParameters { float4x4 viewProjection; float4x4 lightProjection; float4 camera; float4 lightDirection; float4 radiance; };
@@ -82,8 +96,27 @@ vertex QuadOutput studioQuad(uint id [[vertex_id]]) {
     return {float4(p[id],0,1),p[id]*float2(0.5,-0.5)+0.5};
 }
 fragment float4 studioComposite(QuadOutput in [[stage_in]], texture2d<float> scene [[texture(0)]],
-    texture2d<float> video [[texture(1)]], texture2d<float> matte [[texture(2)]], constant float4& options [[buffer(0)]]) {
+    texture2d<float> video [[texture(1)]], texture2d<float> matte [[texture(2)]],
+    texture2d<float,access::read> depth [[texture(3)]], texture2d<uint,access::read> confidence [[texture(4)]],
+    constant float4& options [[buffer(0)]], constant float4& depthParameters [[buffer(1)]]) {
     constexpr sampler s(filter::linear,address::clamp_to_edge);
+    if (options.x == 4 || options.x == 5) {
+        if (options.w < 0.5) return float4(0.015,0.015,0.015,1);
+        float2 uv=in.uv;
+        float rawAspect=float(depth.get_width())/float(depth.get_height());
+        float targetAspect=depthParameters.y;
+        if (rawAspect > targetAspect) uv.y=(uv.y-0.5)*(rawAspect/targetAspect)+0.5;
+        else uv.x=(uv.x-0.5)*(targetAspect/rawAspect)+0.5;
+        if (any(uv < 0.0) || any(uv > 1.0)) return float4(0,0,0,1);
+        uint2 point=min(uint2(uv*float2(depth.get_width(),depth.get_height())),uint2(depth.get_width()-1,depth.get_height()-1));
+        uint c=confidence.read(point).r;
+        if (options.x == 5) return float4(c == 2 ? float3(0,1,0) : c == 1 ? float3(1,0.65,0) : float3(1,0,0),1);
+        float meters=depth.read(point).r;
+        if (!isfinite(meters) || meters <= 0 || c == 0) return float4(0,0,0,1);
+        float t=clamp(meters/depthParameters.x,0.0,1.0);
+        float3 color=float3(1-t,0.25+0.5*(1-abs(2*t-1)),t);
+        return float4(color*(c == 2 ? 1.0 : 0.5),1);
+    }
     if (options.y > 0.5) return float4(0.025,0.008,0.012,1);
     float3 background=scene.sample(s,in.uv).rgb;
     float3 foreground=video.sample(s,in.uv).rgb;

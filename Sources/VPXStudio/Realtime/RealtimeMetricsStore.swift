@@ -4,6 +4,9 @@ import QuartzCore
 import IOSurface
 
 struct RealtimeMetricsSnapshot: Codable, Sendable {
+    var depthPreview: DepthPreviewTelemetry?
+    var temporalMatteMode: TemporalMattePolicy.Mode?
+    var poseAlignment: PoseAlignmentTelemetry?
     var protection = OutputProtection.normal
     var gpuProtected = false
     var gpuDeadlineMisses: UInt64 = 0
@@ -33,6 +36,18 @@ final class RealtimeMetricsStore: @unchecked Sendable {
 
     func recordProtection(_ protection: OutputProtection) {
         lock.lock(); snapshot.protection = protection; lock.unlock()
+    }
+
+    func recordPoseAlignment(_ measurement: PoseAlignmentTelemetry?) {
+        lock.lock(); snapshot.poseAlignment = measurement; lock.unlock()
+    }
+
+    func recordTemporalMatte(_ mode: TemporalMattePolicy.Mode) {
+        lock.lock(); snapshot.temporalMatteMode = mode; lock.unlock()
+    }
+
+    func recordDepthPreview(_ telemetry: DepthPreviewTelemetry?) {
+        lock.lock(); snapshot.depthPreview = telemetry; lock.unlock()
     }
 
     func recordFormatImport(format: String, milliseconds: Double, budget: Double) {

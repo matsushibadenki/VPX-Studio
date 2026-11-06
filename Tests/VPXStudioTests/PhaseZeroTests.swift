@@ -79,13 +79,52 @@ final class PhaseZeroTests: XCTestCase {
     }
 
     func testFiniteReplayCompletes() throws {
+        // Validate finite delivery, not wall-clock 60fps performance. A short
+        // fixture remains reliable when background timer events are coalesced.
         let completed = expectation(description: "Fixed replay completes")
-        let source = try BenchmarkVideoSource()
+        let frames = expectation(description: "All frames delivered")
+        let poses = expectation(description: "All poses delivered")
+        frames.expectedFulfillmentCount = 3; frames.assertForOverFulfill = true
+        poses.expectedFulfillmentCount = 3; poses.assertForOverFulfill = true
+        let fixture = BenchmarkFixture(id: "finite-completion-test",width: 16,height: 16,framesPerSecond: 60,
+            poses: Array(BenchmarkFixture.standard.poses.prefix(3)))
+        let source = try BenchmarkVideoSource(fixture: fixture)
+        source.onFrame = { frame in XCTAssertLessThan(frame.identifier,3); frames.fulfill() }
+        source.onPose = { _, _ in poses.fulfill() }
         source.onComplete = { completed.fulfill() }
         source.onFailure = { error in XCTFail(error.localizedDescription); completed.fulfill() }
         try source.start()
-        wait(for: [completed], timeout: 10)
+        wait(for: [frames,poses,completed], timeout: 10)
         source.stop()
+    }
+
+    func testReplayPatternAcrossCheckerAndChannelBoundaries() throws {
+        let source = try BenchmarkVideoSource()
+        for index in [0,1,119] {
+            let frame = try source.makeFrame(index: index,hostNanoseconds: 100)
+            CVPixelBufferLockBaseAddress(frame.pixelBuffer,.readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(frame.pixelBuffer,.readOnly) }
+            let base = try XCTUnwrap(CVPixelBufferGetBaseAddress(frame.pixelBuffer))
+            let stride = CVPixelBufferGetBytesPerRow(frame.pixelBuffer)
+            for y in [0,39,40,79,255,359] {
+                let row = base.advanced(by: y*stride).assumingMemoryBound(to: UInt32.self)
+                for x in [0,39,40,79,255,639] {
+                    let expected: UInt32 = 0xFF000000 | UInt32((x+index*3)%256)<<16 | UInt32(y%256)<<8 |
+                        UInt32((x/40+y/40)%2 == 0 ? 32 : 224)
+                    XCTAssertEqual(row[x],expected,"frame \(index), (\(x), \(y))")
+                }
+            }
+        }
+    }
+
+    func testReplayRejectsInvalidDimensionsAndSchedulingRate() {
+        for fixture in [
+            BenchmarkFixture(id: "zero-width",width: 0,height: 16,framesPerSecond: 60,poses: BenchmarkFixture.standard.poses),
+            BenchmarkFixture(id: "zero-rate",width: 16,height: 16,framesPerSecond: 0,poses: BenchmarkFixture.standard.poses),
+            BenchmarkFixture(id: "empty",width: 16,height: 16,framesPerSecond: 60,poses: [])
+        ] {
+            XCTAssertThrowsError(try BenchmarkVideoSource(fixture: fixture))
+        }
     }
 
     func testPoseAgeUsesCaptureTimeNotArrivalTime() {

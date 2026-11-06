@@ -30,6 +30,12 @@ final class LatestVideoFrameStore {
         return latest
     }
 
+    func readSnapshot() -> (sourceID: UUID?, frame: VideoFrame?) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (selectedSourceID, latest)
+    }
+
     func clear() {
         lock.lock()
         latest = nil

@@ -16,6 +16,7 @@ public struct CaptureDepthBuffer: Sendable {
     public private(set) var latest: CaptureDepthPacket?
     public private(set) var highConfidenceFraction: Double = 0
     private var hostTime: Double = 0
+    public var captureHostNanoseconds: Double? { latest == nil ? nil : hostTime }
     public init() {}
     @discardableResult public mutating func receive(_ packet: CaptureDepthPacket, clock: CaptureClockStatistics,
                                                     hostNow: UInt64) -> Bool {

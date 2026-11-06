@@ -2,6 +2,12 @@
 
 Apple Silicon向けのリアルタイム・バーチャルプロダクション基盤です。
 
+## スクリーンショット
+
+![VPX Studioの日本語UI。Metalプレビュー、入力ソース、校正操作、診断Inspector](docs/images/studio-ja.jpg)
+
+日本語UIでのデモシーン表示（実機入力なし）。
+
 ## 現在の実装
 
 - MetalKitによる60fpsプレビュー土台
@@ -29,6 +35,7 @@ Xcodeで開発する場合は、`Package.swift`を開きます。
 
 - 🟢 [Done] AVFoundationローカル入力とBGRA／8・10-bit YUVのMetal取込。
 - 🟢 [Done] 限定glTFシーン、PBR・影、校正JSON、レンズ補正・breathing、独立マットとSDR合成、LIVE出力保護。
+- 🟢 [Done] ボード対応点からの姿勢・残差計算、校正revision生成・保存、レンズ設定の適用範囲チェック。[入力形式と操作](docs/CHECKERBOARD-CALIBRATION.md)を参照。画像からの自動交点検出はNext、実ボードでの精度認定はPending。
 - 🟢 [Done] iPhone Capture NodeのAVCapture／ARKit排他取得、深度・confidence転送、認証付きUDP Pose／IMU、品質イベントと時刻の不確かさ管理。[Phase 2仕様・起動手順](docs/PHASE2.md)を参照。
 - ⭕️ [Pending] 実iPhoneの署名・権限、LiDAR、Wi-Fi伝送・整列・長時間運用の受入検証。
 - 🔴 [Later] SDI/NDI、外部トラッカー、Take収録、LED wall出力。
