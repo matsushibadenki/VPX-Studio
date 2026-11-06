@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "ペアリングしたVPX StudioのMacへ、映像・AR追跡・LiDAR深度を送信するためカメラを使用します。";
+"NSMotionUsageDescription" = "任意の回転・加速度データをペアリングしたVPX StudioのMacへ送信します。";
+"NSLocalNetworkUsageDescription" = "VPX StudioのMacを検索し、Wi-Fiで映像と追跡情報を送信します。";

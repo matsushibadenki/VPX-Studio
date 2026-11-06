@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import Observation
 import VPXCaptureProtocol
+import simd
 
 enum StudioMode: String, CaseIterable, Identifiable {
     case build
@@ -47,7 +48,9 @@ enum StudioStatus {
 
 @MainActor @Observable
 final class StudioModel {
-    var mode: StudioMode = .build
+    var mode: StudioMode = .build {
+        didSet { if mode == .live || mode == .record { debugView = .composite } }
+    }
     var selectedSourceName = ""
     private(set) var selectedSourceID: UUID?
 
@@ -62,7 +65,7 @@ final class StudioModel {
         }
         selectedSourceID = id
         selectedSourceName = device.descriptor.displayName
-        selectedTrackingNodeID = captureNodeSources[id] == nil && benchmarkSource?.descriptor.id != id ? nil : id
+        selectedTrackingNodeID = device.descriptor.capabilities.contains(.pose) && (captureNodeSources[id] != nil || benchmarkSource?.descriptor.id == id) ? id : nil
         trackingQuality = .lost
         realtimeCore.latestVideoFrame.selectSource(id)
     }
@@ -71,6 +74,8 @@ final class StudioModel {
     var frameRate = 0.0
     var inputHealth: VideoInputHealth = .missing
     var pipelineMeasurements = PipelineMeasurements()
+    var inputFormatMeasurements: [String: InputFormatPerformance] = [:]
+    var gpuDeadlineMissCount: UInt64 = 0
     var poseCaptureAgeMilliseconds: Double?
     var latencyMilliseconds = 0.0
     var gpuFrameMilliseconds = 0.0
@@ -86,12 +91,92 @@ final class StudioModel {
     var chromaGreenSoftness: Float = 0.20
     var focalLengthMillimeters: Float = CameraRig.preview.lens.focalLengthMillimeters
     var radialDistortionK1: Float = CameraRig.preview.lens.radialDistortionK1
+    var focusDistanceMeters: Float = 3
+    var qualityProfile = LiveQualityProfile.liveFast
+    var inputEncoding = SDRInputEncoding.automatic
+    var debugView = CompositeDebugView.composite
+    private(set) var scene = StudioScene.demo
+    private(set) var cameraCalibration: CameraCalibration?
+    var assetImportError: String?
+    var outputProtection = OutputProtection.normal
+    private var trackingTransforms: [UUID: simd_float4x4] = [:]
+    private var trackingOrigins: [UUID: simd_float4x4] = [:]
+    private var trackingReferences: [UUID: TrackingReferenceState] = [:]
+
+    func resetTrackingOrigin() {
+        guard mode != .live, mode != .record, let id = selectedTrackingNodeID else { return }
+        trackingReferences[id]?.reset()
+        trackingOrigins.removeValue(forKey: id); trackingTransforms.removeValue(forKey: id)
+        poseHealth.removeValue(forKey: id); poseJitterBuffers.removeValue(forKey: id)
+        trackingQuality = .lost
+    }
+
+    var renderSettings: StudioRenderSettings {
+        var settings = StudioRenderSettings()
+        settings.scene = scene
+        settings.camera.setFocalLength(focalLengthMillimeters)
+        settings.camera.lens.focusDistanceMeters = focusDistanceMeters
+        settings.camera.lens.radialDistortionK1 = radialDistortionK1
+        settings.camera.calibration = cameraCalibration
+        settings.camera.worldFromCamera = cameraCalibration?.transform ?? scene.cameraWorldTransform
+        if let id = selectedTrackingNodeID, let pose = trackingTransforms[id], let origin = trackingOrigins[id] {
+            settings.camera.worldFromCamera *= simd_inverse(origin)*pose
+            // Calibration intrinsics remain active while extrinsics follow relative tracking.
+            if var calibration = settings.camera.calibration {
+                let m = settings.camera.worldFromCamera
+                calibration.worldFromCamera = (0..<4).flatMap { [m[$0].x,m[$0].y,m[$0].z,m[$0].w] }
+                settings.camera.calibration = calibration
+            }
+        }
+        settings.profile = qualityProfile; settings.inputEncoding = inputEncoding; settings.debugView = debugView
+        settings.chromaEnabled = chromaKeyEnabled; settings.greenThreshold = chromaGreenThreshold; settings.greenSoftness = chromaGreenSoftness
+        let production = mode == .live || mode == .record
+        settings.trackingLost = production && selectedTrackingNodeID != nil && trackingQuality == .lost
+        settings.protectMissingInput = production
+        return settings
+    }
+
+    func loadScene(from url: URL) async {
+        guard mode != .live, mode != .record else { return }
+        do {
+            let loaded = try await Task.detached { try GLTFSceneLoader.load(url) }.value
+            guard mode != .live, mode != .record else { return }
+            scene = loaded
+            resetTrackingOrigin()
+        }
+        catch { assetImportError = error.localizedDescription }
+    }
+
+    func loadCalibration(from url: URL) async {
+        guard mode != .live, mode != .record else { return }
+        do {
+            let loaded = try await Task.detached { try CameraCalibration.load(url) }.value
+            guard mode != .live, mode != .record else { return }
+            cameraCalibration = loaded
+            focalLengthMillimeters = loaded.referenceFocalLengthMillimeters
+            radialDistortionK1 = loaded.k1
+            resetTrackingOrigin()
+        }
+        catch { assetImportError = error.localizedDescription }
+    }
+
+    func clearCalibration() {
+        guard mode != .live, mode != .record else { return }
+        cameraCalibration = nil
+        resetTrackingOrigin()
+    }
 
     let realtimeCore = RealtimeCore()
     let deviceRegistry = DeviceRegistry()
     let projectConfiguration = ProjectConfiguration.standard
     private(set) var activeCapturePairingCredential: CapturePairingCredential?
     private var captureNodeHost: CaptureNodeBonjourHost?
+    private var captureDepthBuffers: [UUID: CaptureDepthBuffer] = [:]
+    private var captureQualityEvents: [UUID: CaptureQualityEvent] = [:]
+    private var captureConnections: [UUID: UUID] = [:]
+    var depthConfidencePercent: Double?
+    var clockUncertaintyMilliseconds: Double?
+    var trackingReason: CaptureQualityEvent.Reason?
     private var captureNodeSources: [UUID: CaptureNodeHEVCVideoSource] = [:]
     private var clockSyncTasks: [UUID: Task<Void, Never>] = [:]
     private var clockSynchronizers: [UUID: CaptureClockSynchronizer] = [:]
@@ -105,12 +190,14 @@ final class StudioModel {
     private(set) var isBenchmarkRunning = false
 
     func startBenchmark() {
-        guard !isBenchmarkRunning else { return }
+        guard !isBenchmarkRunning, mode != .live, mode != .record else { return }
         do {
             if let previous = benchmarkSource {
                 realtimeCore.detach(previous.descriptor.id)
                 deviceRegistry.remove(previous.descriptor.id)
                 poseHealth.removeValue(forKey: previous.descriptor.id)
+                trackingOrigins.removeValue(forKey: previous.descriptor.id)
+                trackingTransforms.removeValue(forKey: previous.descriptor.id)
             }
             let source = try BenchmarkVideoSource()
             let id = source.descriptor.id
@@ -123,6 +210,10 @@ final class StudioModel {
                     self.benchmarkResult?.lastPose = pose
                     self.poseHealth[id] = PoseHealth(lastAcceptedNanoseconds: hostTime, quality: .nominal,
                                                     capturedHostNanoseconds: Double(hostTime))
+                    var transform = matrix_identity_float4x4
+                    transform.columns.3 = SIMD4(pose.translationMeters[0],pose.translationMeters[1],pose.translationMeters[2],1)
+                    self.trackingTransforms[id] = transform
+                    if self.trackingOrigins[id] == nil { self.trackingOrigins[id] = transform }
                 }
             }
             source.onComplete = { [weak self] in
@@ -239,14 +330,51 @@ final class StudioModel {
         do {
             let credential = try CapturePairingCredential.create()
             let host = CaptureNodeBonjourHost(credential: credential)
-            host.onHello = { [weak self] hello, channel in
-                Task { @MainActor [weak self] in
-                    self?.attachCaptureNode(hello: hello, channel: channel)
+            host.onHello = { [weak self, weak host] hello, channel in
+                Task { @MainActor [weak self, weak host] in
+                    guard let self, let host, captureNodeHost === host else { return }
+                    attachCaptureNode(hello: hello, channel: channel)
                 }
             }
             host.onFailure = { [weak self] error in
                 Task { @MainActor [weak self] in
                     self?.rendererStatus = .error(error.localizedDescription)
+                }
+            }
+            host.onTelemetry = { [weak self] nodeID, connectionID, payload in
+                Task { @MainActor [weak self] in
+                    guard let self, captureConnections[nodeID] == connectionID else { return }
+                    switch payload {
+                    case .pose(let pose): recordPose(pose, from: nodeID)
+                    case .diagnostic(let event):
+                        guard captureQualityEvents[nodeID].map({ event.sequence > $0.sequence }) ?? true else { return }
+                        captureQualityEvents[nodeID]=event
+                        var reference=trackingReferences[nodeID] ?? TrackingReferenceState()
+                        reference.observe(event.referenceSpaceRevision); trackingReferences[nodeID]=reference
+                        if event.quality == .lost || event.reason == .relocalizing {
+                            poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID)
+                            if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
+                        }
+                    }
+                }
+            }
+            host.onDisconnected = { [weak self] nodeID, connectionID in
+                Task { @MainActor [weak self] in
+                    guard let self, captureConnections[nodeID] == connectionID else { return }
+                    clockSyncTasks[nodeID]?.cancel(); clockSyncTasks.removeValue(forKey: nodeID)
+                    clockLastAccepted.removeValue(forKey: nodeID); clockStatistics.removeValue(forKey: nodeID)
+                    poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID)
+                    captureDepthBuffers.removeValue(forKey: nodeID); captureConnections.removeValue(forKey: nodeID)
+                    let previous=captureQualityEvents[nodeID]
+                    // No Node timestamp exists for a Host-observed disconnect.
+                    captureQualityEvents[nodeID]=CaptureQualityEvent(sequence: previous?.sequence ?? 0,
+                        captureTimeNanoseconds: 0, quality: .lost, reason: .disconnected,
+                        referenceSpaceRevision: previous?.referenceSpaceRevision ?? 0)
+                    diagnosticEvents.observe(stream: .tracking, nodeID: nodeID, state: StreamQuality.lost.rawValue,
+                        hostTime: DispatchTime.now().uptimeNanoseconds)
+                    captureNodeSources[nodeID]?.resetClockModel()
+                    deviceRegistry.updateState(for: nodeID, to: .disconnected)
+                    if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
                 }
             }
             try host.start()
@@ -277,7 +405,10 @@ final class StudioModel {
         clockSynchronizers.removeAll()
         clockStatistics.removeAll()
         clockLastAccepted.removeAll()
+        captureDepthBuffers.removeAll(); captureQualityEvents.removeAll()
+        captureConnections.removeAll()
         poseHealth.removeAll()
+        trackingTransforms.removeAll(); trackingOrigins.removeAll(); trackingReferences.removeAll()
         selectedTrackingNodeID = nil
         trackingQuality = .lost
         poseJitterBuffers.removeAll()
@@ -320,15 +451,26 @@ final class StudioModel {
         realtimeCore.metrics.sampleMemory()
         let now = DispatchTime.now().uptimeNanoseconds
         if let id = selectedTrackingNodeID {
+            if ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id], now: now) == .current,
+               captureDepthBuffers[id]?.current(hostNow: now) != nil {
+                depthConfidencePercent=captureDepthBuffers[id].map { $0.highConfidenceFraction*100 }
+            } else { depthConfidencePercent=nil }
+            clockUncertaintyMilliseconds=clockStatistics[id].map { ($0.roundTripNanoseconds/2+$0.jitterNanoseconds)/1_000_000 }
+            trackingReason=captureQualityEvents[id]?.reason
             trackingQuality = (poseHealth[id] ?? PoseHealth()).effectiveQuality(
-                now: now, clock: benchmarkSource?.descriptor.id == id ? .current : .evaluate(lastAccepted: clockLastAccepted[id], now: now))
+                now: now, clock: benchmarkSource?.descriptor.id == id ? .current : .evaluate(lastAccepted: clockLastAccepted[id], now: now),
+                timeoutSeconds: qualityProfile.poseTimeoutSeconds)
             poseCaptureAgeMilliseconds = poseHealth[id]?.captureAgeMilliseconds(now: now)
         } else {
             trackingQuality = .lost
             poseCaptureAgeMilliseconds = nil
+            depthConfidencePercent=nil; clockUncertaintyMilliseconds=nil; trackingReason=nil
         }
         let metrics = realtimeCore.metrics.read()
         pipelineMeasurements = metrics.pipeline
+        inputFormatMeasurements = metrics.inputFormats
+        gpuDeadlineMissCount = metrics.gpuDeadlineMisses
+        outputProtection = metrics.protection
         if isBenchmarkRunning { benchmarkResult?.measurements.append(metrics) }
         inputHealth = metrics.inputHealth
         frameRate = metrics.frameRate
@@ -337,10 +479,12 @@ final class StudioModel {
         droppedFrameEstimate = metrics.droppedFrameEstimate
         inputColorMetadata = realtimeCore.latestVideoFrame.read()?.colorMetadata.summary ?? ""
         diagnosticEvents.observe(stream: .videoInput, state: inputHealth.rawValue, hostTime: now)
+        diagnosticEvents.observe(stream: .gpu, state: metrics.gpuProtected ? "gpuOverload" : "normal", hostTime: now)
+        diagnosticEvents.observe(stream: .protection, state: metrics.protection.rawValue, hostTime: now)
         for id in captureNodeSources.keys.sorted(by: { $0.uuidString < $1.uuidString }) {
             let clock = ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id], now: now)
             diagnosticEvents.observe(stream: .clock, nodeID: id, state: clock.rawValue, hostTime: now)
-            let quality = (poseHealth[id] ?? PoseHealth()).effectiveQuality(now: now, clock: clock)
+            let quality = (poseHealth[id] ?? PoseHealth()).effectiveQuality(now: now, clock: clock,timeoutSeconds: qualityProfile.poseTimeoutSeconds)
             diagnosticEvents.observe(stream: .tracking, nodeID: id, state: quality.rawValue, hostTime: now)
         }
         flushDiagnosticsArchive()
@@ -348,6 +492,7 @@ final class StudioModel {
 
     func diagnosticsReport() -> DiagnosticsReport {
         let now = DispatchTime.now().uptimeNanoseconds
+        let cameraTransform = renderSettings.camera.worldFromCamera
         return DiagnosticsReport(
             schemaVersion: DiagnosticsReport.currentSchemaVersion, capturedAt: Date(), configuration: projectConfiguration,
             sourceName: selectedSourceName, metrics: realtimeCore.metrics.read(),
@@ -366,22 +511,40 @@ final class StudioModel {
                     jitterMilliseconds: stats.map { $0.jitterNanoseconds / 1_000_000 },
                     driftPartsPerMillion: stats?.driftPartsPerMillion,
                     poseQuality: (poseHealth[id] ?? PoseHealth()).effectiveQuality(
-                        now: now, clock: .evaluate(lastAccepted: last, now: now)),
+                        now: now, clock: .evaluate(lastAccepted: last, now: now),timeoutSeconds: qualityProfile.poseTimeoutSeconds),
                     poseAgeMilliseconds: poseHealth[id]?.lastAcceptedNanoseconds.flatMap {
                         now >= $0 ? Double(now - $0) / 1_000_000 : nil
                     },
-                    poseCaptureAgeMilliseconds: poseHealth[id]?.captureAgeMilliseconds(now: now))
+                    poseCaptureAgeMilliseconds: poseHealth[id]?.captureAgeMilliseconds(now: now),
+                    clockUncertaintyMilliseconds: stats.map { ($0.roundTripNanoseconds/2+$0.jitterNanoseconds)/1_000_000 },
+                    trackingReason: captureQualityEvents[id]?.reason.rawValue,
+                    depthHighConfidenceFraction: captureDepthBuffers[id].flatMap {
+                        var buffer=$0
+                        return buffer.current(hostNow: now) == nil ? nil : buffer.highConfidenceFraction
+                    })
             },
             events: diagnosticEvents.events,
             discardedEventCount: diagnosticEvents.discardedEventCount,
-            benchmark: benchmarkResult
+            benchmark: benchmarkResult,
+            renderConfiguration: RenderConfiguration(sceneName: scene.name,sceneID: scene.id,calibration: cameraCalibration,
+                qualityProfile: qualityProfile,inputEncoding: inputEncoding,debugView: debugView,
+                focalLengthMillimeters: focalLengthMillimeters,
+                radialDistortionK1: radialDistortionK1,
+                cameraWorldFromCamera: (0..<4).flatMap { [cameraTransform[$0].x,cameraTransform[$0].y,cameraTransform[$0].z,cameraTransform[$0].w] },
+                focusDistanceMeters: focusDistanceMeters,
+                chromaEnabled: chromaKeyEnabled,greenThreshold: chromaGreenThreshold,greenSoftness: chromaGreenSoftness)
         )
     }
 
     private func attachCaptureNode(hello: CaptureNodeHello, channel: CaptureSecureChannel) {
+        let connectionID=channel.connectionID
+        captureConnections[hello.nodeID]=connectionID
+        captureDepthBuffers.removeValue(forKey: hello.nodeID); captureQualityEvents.removeValue(forKey: hello.nodeID)
         let source: CaptureNodeHEVCVideoSource
         if let existing = captureNodeSources[hello.nodeID] {
             source = existing
+            source.updateHello(hello)
+            deviceRegistry.register(source.descriptor, role: .primaryCamera)
         } else {
             source = CaptureNodeHEVCVideoSource(hello: hello)
             source.onFrame = { [weak core = realtimeCore] frame in
@@ -410,9 +573,18 @@ final class StudioModel {
                 source?.onFailure?(error)
             }
         }
-        channel.onPosePacket = { [weak self] pose in
+        source.onKeyFrameNeeded = { [weak channel] in
+            try? channel?.sendControl(CaptureMessageEnvelope(kind: .control,
+                payload: CaptureNodeControlCommand(action: .requestKeyFrame)))
+        }
+        channel.onDepthPacket = { [weak self] packet in
             Task { @MainActor [weak self] in
-                self?.recordPose(pose, from: hello.nodeID)
+                guard let self, captureConnections[hello.nodeID] == connectionID,
+                      let clock=clockStatistics[hello.nodeID],
+                      ClockFreshness.evaluate(lastAccepted: clockLastAccepted[hello.nodeID], now: DispatchTime.now().uptimeNanoseconds) == .current else { return }
+                var buffer=captureDepthBuffers[hello.nodeID] ?? CaptureDepthBuffer()
+                buffer.receive(packet, clock: clock, hostNow: DispatchTime.now().uptimeNanoseconds)
+                captureDepthBuffers[hello.nodeID]=buffer
             }
         }
         channel.onClockReply = { [weak self] reply in
@@ -424,6 +596,7 @@ final class StudioModel {
                 hostReceiveNanoseconds: hostReceiveNanoseconds
             )
             Task { @MainActor [weak self] in
+                guard self?.captureConnections[hello.nodeID] == connectionID else { return }
                 self?.recordClockExchange(exchange, for: hello.nodeID)
             }
         }
@@ -451,6 +624,7 @@ final class StudioModel {
         clockSynchronizers.removeValue(forKey: nodeID)
         poseJitterBuffers.removeValue(forKey: nodeID)
         poseHealth.removeValue(forKey: nodeID)
+        trackingTransforms.removeValue(forKey: nodeID); trackingOrigins.removeValue(forKey: nodeID); trackingReferences.removeValue(forKey: nodeID)
         clockSyncTasks[nodeID] = Task { [weak channel] in
             while !Task.isCancelled {
                 let probe = CaptureClockProbe(
@@ -467,6 +641,13 @@ final class StudioModel {
         guard let result = try? synchronizer.record(exchange) else { return }
         clockSynchronizers[nodeID] = synchronizer
         guard result.wasAccepted else { return }
+        guard CaptureSynchronizationPolicy().accepts(result.statistics) else {
+            clockLastAccepted.removeValue(forKey: nodeID)
+            captureNodeSources[nodeID]?.resetClockModel()
+            poseJitterBuffers.removeValue(forKey: nodeID); captureDepthBuffers.removeValue(forKey: nodeID)
+            if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
+            return
+        }
         clockLastAccepted[nodeID] = exchange.hostReceiveNanoseconds
         clockOffsetMilliseconds = result.statistics.nodeClockOffsetNanoseconds / 1_000_000
         networkRoundTripMilliseconds = result.statistics.roundTripNanoseconds / 1_000_000
@@ -477,6 +658,17 @@ final class StudioModel {
     }
 
     private func recordPose(_ pose: CapturePosePacket, from nodeID: UUID) {
+        if let event=captureQualityEvents[nodeID], event.quality == .lost || event.reason == .relocalizing {
+            return
+        }
+        var reference = trackingReferences[nodeID] ?? TrackingReferenceState()
+        reference.observe(pose.referenceSpaceRevision)
+        trackingReferences[nodeID] = reference
+        if reference.requiresReset {
+            poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID)
+            if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
+            return
+        }
         guard ClockFreshness.evaluate(lastAccepted: clockLastAccepted[nodeID], now: DispatchTime.now().uptimeNanoseconds) == .current,
               let statistics = clockStatistics[nodeID] else {
             poseJitterBuffers.removeValue(forKey: nodeID)
@@ -484,7 +676,10 @@ final class StudioModel {
             if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
             return
         }
-        var buffer = poseJitterBuffers[nodeID] ?? CapturePoseJitterBuffer()
+        var buffer = poseJitterBuffers[nodeID] ?? CapturePoseJitterBuffer(maximumAgeNanoseconds: qualityProfile.poseTimeoutSeconds*1_000_000_000)
+        if buffer.maximumAgeNanoseconds != qualityProfile.poseTimeoutSeconds*1_000_000_000 {
+            buffer = CapturePoseJitterBuffer(maximumAgeNanoseconds: qualityProfile.poseTimeoutSeconds*1_000_000_000)
+        }
         buffer.enqueue(
             pose,
             nodeClockOffsetNanoseconds: statistics.nodeClockOffsetNanoseconds,
@@ -492,12 +687,21 @@ final class StudioModel {
             referenceHostNanoseconds: statistics.referenceHostNanoseconds
         )
         if let ready = buffer.dequeueLatestReady(hostNowNanoseconds: DispatchTime.now().uptimeNanoseconds) {
-            let quality = Self.streamQuality(for: ready.quality)
+            let t = ready.translationMeters, r = ready.rotationQuaternion
+            let rotationLength = r.count == 4 ? simd_length(SIMD4(r[0],r[1],r[2],r[3])) : 0
+            let validPose = t.count == 3 && r.count == 4 && (t+r).allSatisfy(\.isFinite) && rotationLength.isFinite && rotationLength > 0.001
+            let quality = validPose ? Self.streamQuality(for: ready.quality) : .lost
             poseHealth[nodeID] = PoseHealth(lastAcceptedNanoseconds: DispatchTime.now().uptimeNanoseconds, quality: quality,
                 capturedHostNanoseconds: HostClockMapping.hostTime(nodeNanoseconds: ready.captureTimeNanoseconds,
                     offset: statistics.nodeClockOffsetNanoseconds, driftPPM: statistics.driftPartsPerMillion,
                     referenceHost: statistics.referenceHostNanoseconds))
             if selectedTrackingNodeID == nodeID { trackingQuality = quality }
+            if quality != .lost, validPose {
+                var transform = simd_float4x4(simd_quatf(vector: simd_normalize(SIMD4(r[0],r[1],r[2],r[3]))))
+                transform.columns.3 = SIMD4(t[0],t[1],t[2],1)
+                trackingTransforms[nodeID] = transform
+                if trackingOrigins[nodeID] == nil { trackingOrigins[nodeID] = transform }
+            }
         }
         poseJitterBuffers[nodeID] = buffer
     }

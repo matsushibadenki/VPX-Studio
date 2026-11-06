@@ -70,15 +70,16 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 - [Done] ローカルカメラ入力をDevice Registry、Metal texture変換、Studio画面へ接続。
 - [Done] CVPixelBufferからCVMetalTextureCache経由でMetal textureへ取り込む。
 - [Done] 映像入力の色域・伝達特性・YCbCrマトリクスをVideoFrameへ伝播し、Inspectorに表示。
-- [Next] 入力形式ごとのゼロコピー経路と色変換コストを計測する。
+- 🟢 [Done] BGRA8と8/10-bit YUV両レンジの直接取込・GPU色変換を実装し、形式別の実測値・予算・超過回数を記録。
 - [Done] CameraRigのセンサーサイズ・焦点距離から画角を導く投影を実装。
 - [Done] CameraRigに一次放射歪みK1を追加し、実写レンズ補正を実装。
-- [Next] CameraRigの実測内部／外部パラメータ入力と、複数係数のレンズ校正を実装。
-- [Next] glTFまたは限定OpenUSDサブセットを読み込み、Mesh、PBR、ライト、影を描画。
+- 🟢 [Done] 内部／外部パラメータ、5係数歪み、breathingと出所を校正JSONからCameraRigへ適用。
+- 🟢 [Done] 限定glTF 2.0の静的メッシュ・PBR係数・directional lightを読み込み、深度シャドウマップとPBRを描画。
 - [Done] Frame Graphで3Dシーンと実写クロマキー合成を順序制御する基礎合成を実装。
-- [Next] 実写、CG、アルファマットをMetal Frame Graphで合成。
-- [Next] SDR出力の色変換とプレビュー用オーバーレイを実装。
-- [Next] 入力断、トラッキング断、GPU期限超過時の保護状態を実装。
+- 🟢 [Done] 実写・CG・独立アルファマットを共有イベント／フェンス付きFrame Graphで合成。
+- 🟢 [Done] 線形SDR合成とsRGB出力、色メタデータ判定、デバッグパス・状態オーバーレイを実装。
+- 🟢 [Done] 入力断・追跡断・GPU超過の保護、品質別の期限、警告保存、追跡基準変更時の隔離を実装。
+- ⭕️ [Pending] 実カメラを含む機種別4K60／10-bit・校正精度・長時間運用認定。詳細は[Phase 1仕様](docs/PHASE1.md)。
 - [Later] HDR、OCIO／ACEScg、LUTの本格運用を追加。
 
 **完了条件:** 対象Mac上で、単一入力のプレビューを60fpsで維持し、フレーム落ち・処理遅延・入力品質を画面とログで確認できる。
@@ -87,18 +88,20 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 
 **目的:** iPhoneを映像、姿勢、IMU、深度の正規入力としてMacへ接続する。
 
-- [Done] iPhone側Capture NodeのARSession取得コンポーネントを作成。
-- [Next] iOSアプリバンドルの署名、ローカルネットワーク／カメラ／モーション権限文言、実機接続試験を追加。
-- [Done] Capture NodeとHostで共有するバージョン付き通信メッセージ、映像制御契約、長さプレフィックス codec、分割受信の再構成テストを実装。
-- [Next] AVCaptureSessionで映像を取得し、フレームIDと取得時刻を付与。
-- [Done] ARKit World TrackingとCoreMotionからPose、角速度、加速度、品質状態を送信。
-- [Next] LiDAR対応機でscene depthと信頼度を送信。非対応機では機能を明示的に無効化。
-- [Done] iPhone側Bonjour探索、QRスキャン画面、Keychainへの資格情報保存を実装。
-- [Next] Wi-Fi上に、制御用の信頼性ストリームと、Pose／IMU用の低遅延データグラムを実装。
-- [Done] iPhoneとMac間のクロック差とRTTを継続測定し、Host Inspectorへ表示。
-- [Done] 複数サンプルからジッターと外れ値を推定し、Host Inspectorへ表示。
-- [Done] 長期ドリフト推定と、Poseジッターバッファへの推定時計差適用を追加。
-- [Next] ARKitの再ローカライズ、追跡低下、接続断を品質イベントとして伝播。
+- 🟢 [Done] iPhone側Capture NodeのARSession取得コンポーネントを作成。
+- 🟢 [Done] iOSアプリプロジェクト、3言語の権限文言、許可確認・設定導線、Privacy Manifestを追加。
+- 🟢 [Done] Capture NodeとHostで共有するバージョン付き通信メッセージ、映像制御契約、長さプレフィックス codec、分割受信の再構成テストを実装。
+- 🟢 [Done] ARKitと排他のAVCapture映像専用モード、フレームID・取得時刻・色・カメラメタデータを追加。
+- 🟢 [Done] ARKit World TrackingとCoreMotionからPose、角速度、加速度、品質状態を送信。
+- 🟢 [Done] LiDAR深度・信頼度をバイナリ送信し、MacのNode別有界バッファ・信頼度診断へ接続。非対応機は能力から除外。
+- 🟢 [Done] iPhone側Bonjour探索、QRスキャン画面、Keychainへの資格情報保存を実装。
+- 🟢 [Done] AES-GCM保護されたTCPとPose／IMU／診断UDPを分離。接続トークン、MTU制限、リプレイ防止を追加。
+- 🟢 [Done] iPhoneとMac間のクロック差とRTTを継続測定し、Host Inspectorへ表示。
+- 🟢 [Done] 複数サンプルからジッターと外れ値を推定し、Host Inspectorへ表示。
+- 🟢 [Done] 長期ドリフト推定と、Poseジッターバッファへの推定時計差適用を追加。
+- 🟢 [Done] ARKit状態理由・参照空間revision・接続断の品質イベント、時計の不確かさと期限切れ破棄、HEVCキーフレーム再要求を追加。
+- 🟢 [Done] 全74件のテスト、ローカルTCP／UDP接続試験、Simulator／実機向け署名なしアプリビルドを確認。詳細は[Phase 2仕様](docs/PHASE2.md)。
+- ⭕️ [Pending] 実iPhoneの署名・権限許可／拒否、LiDAR有無、Wi-Fi映像・Pose・深度整列、AR再ローカライズ、機種別性能・長時間運用の受入試験。詳細版のPhase 2に集約。
 
 **完了条件:** 単一iPhoneの映像とPoseが同一タイムラインに整列し、トラッキング品質・時刻差・通信遅延をMacで確認できる。
 

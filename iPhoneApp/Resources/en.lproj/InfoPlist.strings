@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Capture video, AR tracking and LiDAR depth for your paired VPX Studio Mac.";
+"NSMotionUsageDescription" = "Send optional device rotation and acceleration to your paired VPX Studio Mac.";
+"NSLocalNetworkUsageDescription" = "Find and connect to your paired VPX Studio Mac to send video and tracking over Wi-Fi.";

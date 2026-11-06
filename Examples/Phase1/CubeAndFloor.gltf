@@ -1,0 +1,121 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "VPX Phase 1 example"
+  },
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,mpkZv5qZGb+amVnAmpkZP5qZGb+amVnAmpkZP5qZGT+amVnAmpkZv5qZGb+amVnAmpkZP5qZGT+amVnAmpkZv5qZGT+amVnAmpkZP5qZGb8zM5PAmpkZv5qZGb8zM5PAmpkZv5qZGT8zM5PAmpkZP5qZGb8zM5PAmpkZv5qZGT8zM5PAmpkZP5qZGT8zM5PAmpkZv5qZGb8zM5PAmpkZv5qZGb+amVnAmpkZv5qZGT+amVnAmpkZv5qZGb8zM5PAmpkZv5qZGT+amVnAmpkZv5qZGT8zM5PAmpkZP5qZGb+amVnAmpkZP5qZGb8zM5PAmpkZP5qZGT8zM5PAmpkZP5qZGb+amVnAmpkZP5qZGT8zM5PAmpkZP5qZGT+amVnAmpkZv5qZGT+amVnAmpkZP5qZGT+amVnAmpkZP5qZGT8zM5PAmpkZv5qZGT+amVnAmpkZP5qZGT8zM5PAmpkZv5qZGT8zM5PAmpkZv5qZGb8zM5PAmpkZP5qZGb8zM5PAmpkZP5qZGb+amVnAmpkZv5qZGb8zM5PAmpkZP5qZGb+amVnAmpkZv5qZGb+amVnAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAACAwJqZGb8AAIC/AACAQJqZGb8AAIC/AACAQJqZGb8AABDBAACAwJqZGb8AAIC/AACAQJqZGb8AABDBAACAwJqZGb8AABDBAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAA",
+      "byteLength": 1008
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 432
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 432,
+      "byteLength": 432
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 864,
+      "byteLength": 72
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 936,
+      "byteLength": 72
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 36,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 36,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 6,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 6,
+      "type": "VEC3"
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.12,
+          0.35,
+          0.75,
+          1
+        ],
+        "metallicFactor": 0.25,
+        "roughnessFactor": 0.35
+      }
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.3,
+          0.3,
+          0.3,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.8
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1
+          },
+          "material": 0,
+          "mode": 4
+        },
+        {
+          "attributes": {
+            "POSITION": 2,
+            "NORMAL": 3
+          },
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0
+}

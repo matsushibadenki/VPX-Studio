@@ -11,6 +11,7 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 - 🟢 [Done] 現在のコードベースで実装済み、または設計・契約として確定済み
 - 🟠 [Next] 次に着手する高優先度の未完了作業
 - 🔴 [Later] 計画済みだが、直近のリリースには含めない作業
+- ⭕️ [Pending] 実機・外部機材などが必要で、現在の開発環境では検証できない受入項目
 
 ## 2. プロジェクト全体の節目
 
@@ -99,23 +100,27 @@ VPX Studioを、Apple Silicon Mac上で動作するリアルタイム・バー�
 
 - 🟢 [Done] AVFoundationのUVC／Continuity Camera入力をDevice Registryへ接続。
 - 🟢 [Done] CVPixelBufferからCVMetalTextureCacheを経由するテクスチャ入力を実装。
-- 🟠 [Next] 入力形式ごとのゼロコピー経路と色変換コストを測定し、許容値を設定。
+- 🟢 [Done] BGRA8、8/10-bit YUV 4:2:0のvideo/full rangeをCVMetalTextureCacheから直接取込。入力形式別の取込CPU時間・独立した色変換GPU時間・予算超過数を画面と診断JSONへ出力。取込2ms、色変換4ms（Reviewは16ms）の運用予算を設定。OS内部コピーの保証とは区別する。
 - 🟢 [Done] センサーサイズ・焦点距離から画角を導くCameraRig投影を実装。
 - 🟢 [Done] 一次放射歪みK1による基本レンズ補正を実装。
-- 🟠 [Next] 実測内部／外部パラメータ、複数歪み係数、breathingテーブルをCameraRigへ追加。
-- 🟠 [Next] 限定OpenUSDまたはglTFサブセットのMesh、PBR、ライト、影を読み込む。
+- 🟢 [Done] 校正JSONからfx/fy/cx/cy、外部変換、Brown–Conradyのk1/k2/k3/p1/p2、breathingテーブルと出所を読込・検証。CameraRig投影・映像補正・フォーカス補間へ適用し、校正と矛盾する手動編集やLIVE中の読込を禁止。
+- 🟢 [Done] 限定glTF 2.0ローダーで静的TRIANGLES、階層・TRS／行列、法線、metallic-roughness PBR係数、1灯のdirectional lightを読み込み、MetalでPBRと深度シャドウマップを描画。未対応機能は読込エラーとし、対応範囲を[Phase 1仕様](./PHASE1.md)に明記。
 - 🟢 [Done] Frame GraphでAcquire→Normalize→Render→Composite→Presentの順序を管理。
-- 🟠 [Next] 実写、CG、アルファマットをMetalパス間の同期フェンス付きで合成。
-- 🟠 [Next] SDR色変換、入力色メタデータ、プレビューオーバーレイを実装。
+- 🟢 [Done] linear video・RGBA16Float CG・R16Floatアルファマットを別パス化。共有イベントとMetal fenceで依存関係を同期し、線形合成してsRGB drawableへ出力。実写／CG／マットのデバッグ表示を追加。
+- 🟢 [Done] sRGB／Rec.709／Linear入力を扱い、YUVレンジ・行列メタデータを反映。自動判定できない入力色は保護し、明示的な選択を要求。fps・GPU時間・入力／追跡／GPU保護状態をプレビューへ表示。
 - 🟢 [Done] 映像入力未接続・停止を判定し、受信後500ms超過／品質lost／不正時刻のフレームを合成から除外。新しい正常フレームで自動復旧し、3言語の警告を表示する。
 - 🟢 [Done] 未接続、タイムアウト境界、復旧、不正時刻、lost品質の回帰テストを追加。全31件成功。
-- 🟠 [Next] GPU期限超過、トラッキング断時の保護状態、警告イベント保存、プロファイル別タイムアウトを実装。
+- 🟢 [Done] GPU期限3回連続超過で保護・ジオメトリ負荷を縮小し、10回連続正常で復帰。LIVE／RECORDの追跡断・入力断を保護し、警告を履歴／JSON／JSONLへ保存。Live Fast／Live Quality／Review Cinemaの入力・Pose・GPU期限と描画周期を適用。追跡revision変更は手動の基準再設定まで隔離する。
 - ⭕️ [Pending] 実機カメラ切断・再接続時のGPU表示と警告レイアウトの目視確認。
 - 🔴 [Later] HDR、OCIO／ACEScg、LUTを色変換マニフェストへ統合。
 
 ### 完了条件
 
 対象Macの標準プロファイルで、単一入力のプレビューを60fpsで維持し、入力年齢、処理時間、ドロップ、品質状態を画面とログで確認できる。
+
+**開発完了状態（2026-11-06）:** Phase 1の開発項目は実装済み。全65件のテストに加え、実画面でglTF・校正JSON読込、PBRと影、マット表示、LIVE時の追跡喪失保護、形式別コストと警告履歴を確認。標準4K60／10-bitの機種別連続運転認定はPendingであり、開発実装の完了と区別する。[対応範囲・操作・検証方法](./PHASE1.md)を参照。
+
+- ⭕️ [Pending] 対応Mac／実カメラでの4K60・10-bit連続入力、校正残差と実レンズbreathing、熱・メモリ圧迫・GPU障害を含む長時間運用認定。
 
 ## 6. Phase 2 — iPhone Capture Node単体
 
@@ -126,25 +131,35 @@ iPhoneを、映像カメラ、トラッキング端末、IMU、対応機種の�
 ### iPhone側
 
 - 🟢 [Done] ARSessionからワールドPose、追跡状態、角速度、加速度を取得するCoordinatorを実装。
-- 🟠 [Next] AVCaptureSessionの映像にframeID、captureTime、色メタデータ、カメラ情報を付与。
+- 🟢 [Done] AVCaptureSessionの映像専用モードにframeID、単調増加時計のcaptureTime、色メタデータ、カメラIDを付与。ARKit同期モードとは排他にし、ARKit側にも色・内部パラメータを付与してHEVC経路へ保持。
 - 🟢 [Done] VideoToolbox HEVCエンコードとキーフレーム要求、品質変更の制御契約を実装。
-- 🟠 [Next] LiDAR搭載機のscene depthとconfidence textureを送信。非搭載機は能力から明示的に除外。
-- 🟠 [Next] カメラ、モーション、ローカルネットワーク権限と拒否時の説明を整備。
+- 🟢 [Done] LiDAR scene depth（Float32 LE）とconfidence（UInt8）を5fps上限でバイナリ送信。MacはNode別の有界バッファへ受信し、形式・サイズ・信頼度・時刻を検証。非搭載機／映像専用モード／無効設定はHelloのdepth能力から除外。
+- 🟢 [Done] カメラの非同期許可確認、拒否時の設定導線、任意モーションの可用性判定、ローカルネットワーク探索失敗時の説明を実装。iOSアプリプロジェクト、Bonjour宣言、英語・日本語・简体中文の権限文言とPrivacy Manifestを追加。
 - 🟢 [Done] Host探索、QRスキャン、確認コード、Keychain資格情報保存、深いリンク処理を実装。
 
 ### Mac側・通信
 
 - 🟢 [Done] BonjourとNetwork.frameworkによるHost発見・接続確立を実装。
-- 🟢 [Done] TLS相当の暗号化チャネルとAES-GCM保護メッセージを実装。
-- 🟠 [Next] 制御用信頼性ストリームと、Pose／IMU／診断用低遅延データグラムを分離。
-- 🟢 [Done] 映像フレーム、Pose、深度、Clock SampleをNode IDごとに登録。
+- 🟢 [Done] QR共有資格情報によるAES-GCM保護チャネルを実装。TLSそのもの、証明書認証、前方秘匿性を実装したものではない。
+- 🟢 [Done] Protocol v2でTCP（制御・映像・深度・時計交換）とUDP（Pose／IMU／診断）を分離。TCPで通知する接続トークン、Node ID、AEAD、1200バイト上限、128パケットのリプレイ窓を検査。PoseをTCPへ暗黙にフォールバックしない。
+- 🟢 [Done] 映像、Pose、深度、Clock SampleをNode ID別に保持。再接続時は能力を更新し、接続断で同期・Pose・深度を無効化する。深度は受信・診断までで、合成への利用はPhase 3。
 - 🟢 [Done] 4タイムスタンプ交換による時計差、RTT、ジッター、ドリフト推定を実装。
-- 🟠 [Next] ARKitのrelocalization、limited、tracking lost、接続断を品質イベントとして伝播。
-- 🟠 [Next] 推定時計差と不確かさを映像・Poseバッファの選択に反映し、期限切れデータを破棄。
+- 🟢 [Done] ARKitのlimited理由、relocalization、interruption、failureと接続断を品質イベント化。重要な状態遷移はTCPでも通知し、重複を除去。再ローカライズ時は参照空間revisionを更新し、基準再設定まで追跡を保護する。HostでAR理由・深度高信頼度画素率・時計不確かさを3言語表示し、診断JSON v6へ保存。
+- 🟢 [Done] offset・driftの逆変換を映像／Pose／深度へ適用。時計の不確かさ推定（RTT/2 + jitter）が50msを超えるモデルは使用しない。映像・深度は500ms、Poseは品質プロファイルの期限で破棄し、HEVC参照欠落時はキーフレームを再要求する。
+
+### 検証結果と保留
+
+- 🟢 [Done] 全74件のテストを通過。深度のバイナリ往復・破損拒否、UDPのMTU・改ざん・鍵違い・再送拒否、時計逆変換・不確かさ・期限切れを検証。Network.frameworkのローカルTCP時計交換・EOFと、UDP接続トークンの受入／拒否も実通信で確認。
+- 🟢 [Done] Macビルド、iOS Simulator用アプリ、実機向けiOSアプリの署名なしビルドを確認。実装・既定値・受入手順は[Phase 2仕様](PHASE2.md)に記載。
+- 🟢 [Done] iPhone SE（第3世代）／iPhone 16 Pro MaxのSimulator初期画面でSafe Area・左右余白・改行を確認。
+- ⭕️ [Pending] 開発用署名・実iPhoneへのインストール、3言語のカメラ／モーション／ローカルネットワーク権限の初回許可・拒否・設定復帰を確認する。
+- ⭕️ [Pending] LiDAR搭載機／非搭載機で能力の一致、scene depthとconfidenceの実測値、映像・Pose・深度の整列を確認する。
+- ⭕️ [Pending] 実Wi-FiでのBonjour発見、QRペアリング、TCP／UDP到達性、パケット損失・再順序・切断復帰、4K60／10-bit・温度・電池・長時間運用を測定する。ローカル接続試験をWi-Fi実機検証の代替とはしない。
+- ⭕️ [Pending] 実環境のARKit再ローカライズ、遮蔽、急な動き、バックグラウンド復帰で品質理由・revision・追跡保護とキーフレーム復旧を確認する。
 
 ### 完了条件
 
-実機の単一iPhoneから映像とPoseを同一タイムラインへ整列し、Mac上でNode状態、ARKit状態、時計差、RTT、ジッター、深度信頼度を確認できる。
+実機の単一iPhoneから映像とPoseを同一タイムラインへ整列し、Mac上でNode状態、ARKit状態、時計差、RTT、ジッター、深度信頼度を確認できる。開発環境での実装は完了、M2の実機受入認定は上記Pendingの完了まで保留する。
 
 ## 7. Phase 3 — 校正・センサーフュージョン・合成品質
 
@@ -327,8 +342,8 @@ iPhoneを、映像カメラ、トラッキング端末、IMU、対応機種の�
 ## 15. 直近の着手順
 
 1. 🟢 [Done] Phase 0の対象環境・区間別計測・コピー／メモリ計測・固定入力ベンチマーク・診断保存を実装。検証条件と機材別の保留項目はPhase 0本体に集約する。
-2. 🟠 [Next] Phase 1のOpenUSD／glTF最小ローダー、Metal合成、SDR色変換を完成させる。
-3. 🟠 [Next] Phase 2のiPhone実機権限、AVCapture映像、深度、品質イベントを検証する。
+2. 🟢 [Done] Phase 1の限定glTF、PBR・影、校正、同期付きマット合成、SDR変換、形式別計測と出力保護を実装。機材別の受入確認はPhase 1本体のPendingへ集約する。
+3. 🟢 [Done] Phase 2のAVCapture映像、深度転送、UDP分離、権限説明、品質イベント、不確かさ付き時刻整列を実装。実機受入はPhase 2本体のPendingへ集約する。
 4. 🟠 [Next] Phase 3のステージ校正とCalibration Profileを追加し、LIVE前チェックへ接続する。
 5. 🟠 [Next] Phase 4のNode役割、Admission Control、再接続、Node別診断を完成させる。
 6. 🔴 [Later] Take、プロ機材、LED wall、高品位レンダリングを順に追加する。

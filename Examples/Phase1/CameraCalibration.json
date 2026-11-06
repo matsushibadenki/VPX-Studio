@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "name": "Example · estimated",
+  "source": "estimated",
+  "imageWidth": 1920,
+  "imageHeight": 1080,
+  "fx": 1866.667,
+  "fy": 1866.667,
+  "cx": 960,
+  "cy": 540,
+  "k1": -0.04,
+  "k2": 0.005,
+  "k3": 0,
+  "p1": 0.0005,
+  "p2": 0,
+  "referenceFocalLengthMillimeters": 35,
+  "worldFromCamera": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1
+  ],
+  "breathing": [
+    {
+      "focusMeters": 1,
+      "focalLengthMillimeters": 35
+    },
+    {
+      "focusMeters": 10,
+      "focalLengthMillimeters": 34
+    }
+  ]
+}

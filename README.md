@@ -25,9 +25,12 @@ Xcodeで開発する場合は、`Package.swift`を開きます。
 `Sources/VPXStudio/Resources/LocalizationCatalog.json` の `languages` 配列に、
 `id`、表示名、既存キーすべての翻訳を持つ言語オブジェクトを追加します。言語選択メニューはカタログを読み込むため、Swiftコードを変更せずに候補へ追加されます。
 
-## 次の実装
+## 実装状況と操作
 
-- [Next] AVFoundationによるローカル映像入力
-- [Next] iPhone Capture Node（ARKit Pose、CoreMotion、深度、LAN時刻同期）
-- [Next] Metal texture入力、カメラ補正、基本3Dシーン
-- [Later] SDI/NDI、外部トラッカー、Take収録、LED wall出力
+- 🟢 [Done] AVFoundationローカル入力とBGRA／8・10-bit YUVのMetal取込。
+- 🟢 [Done] 限定glTFシーン、PBR・影、校正JSON、レンズ補正・breathing、独立マットとSDR合成、LIVE出力保護。
+- 🟢 [Done] iPhone Capture NodeのAVCapture／ARKit排他取得、深度・confidence転送、認証付きUDP Pose／IMU、品質イベントと時刻の不確かさ管理。[Phase 2仕様・起動手順](docs/PHASE2.md)を参照。
+- ⭕️ [Pending] 実iPhoneの署名・権限、LiDAR、Wi-Fi伝送・整列・長時間運用の受入検証。
+- 🔴 [Later] SDI/NDI、外部トラッカー、Take収録、LED wall出力。
+
+[Phase 1の操作・対応範囲](docs/PHASE1.md)と[詳細ロードマップ](docs/ROADMAP.md)を参照してください。`Examples/Phase1`にglTFと校正JSONのサンプルを用意しています。校正サンプルは推定値であり、実機測定値ではありません。

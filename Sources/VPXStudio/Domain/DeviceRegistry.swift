@@ -32,7 +32,11 @@ final class DeviceRegistry {
     private(set) var devices: [RegisteredDevice] = []
 
     func register(_ descriptor: DeviceDescriptor, role: DeviceRole) {
-        guard !devices.contains(where: { $0.id == descriptor.id }) else { return }
+        if let index=devices.firstIndex(where: { $0.id == descriptor.id }) {
+            let previous=devices[index]
+            devices[index]=RegisteredDevice(descriptor: descriptor, role: previous.role, state: previous.state)
+            return
+        }
         devices.append(
             RegisteredDevice(
                 descriptor: descriptor,

@@ -41,6 +41,12 @@ struct StudioView: View {
         } message: {
             Text(diagnosticsExportError ?? "")
         }
+        .alert(localization.text(.assetImportFailed), isPresented: Binding(
+            get: { studio.assetImportError != nil },
+            set: { if !$0 { studio.assetImportError = nil } }
+        )) {
+            Button("OK") { studio.assetImportError = nil }
+        } message: { Text(studio.assetImportError ?? "") }
         .task {
             while !Task.isCancelled {
                 studio.refreshMetrics()
@@ -101,10 +107,13 @@ struct StudioView: View {
     private var sourcePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(localization.text(.sources)).font(.headline)
+            Button(localization.text(.loadScene), systemImage: "cube.transparent") { chooseAsset(isScene: true) }
+                .disabled(isProduction)
+            Text(studio.scene.name).font(.caption).lineLimit(1).help(studio.scene.name)
             Button(localization.text(.runBenchmark), systemImage: "speedometer") {
                 studio.startBenchmark()
             }
-            .disabled(studio.isBenchmarkRunning)
+            .disabled(studio.isBenchmarkRunning || isProduction)
             Label(localization.text(.iphoneCaptureNode), systemImage: "iphone")
             Label(localization.text(.professionalVideoInput), systemImage: "video")
             Label(localization.text(.externalTracking), systemImage: "scope")
@@ -186,22 +195,59 @@ struct StudioView: View {
                 chromaGreenThreshold: studio.chromaGreenThreshold,
                 chromaGreenSoftness: studio.chromaGreenSoftness,
                 focalLengthMillimeters: studio.focalLengthMillimeters,
-                radialDistortionK1: studio.radialDistortionK1
+                radialDistortionK1: studio.radialDistortionK1,
+                renderSettings: studio.renderSettings
             )
                 .clipShape(.rect(cornerRadius: 10))
                 .padding(12)
-            Text(studio.rendererStatus.text(localization))
-                .font(.caption.monospaced())
-                .padding(8)
-                .background(.black.opacity(0.55), in: Capsule())
-                .padding(24)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(format: "%.1f fps · GPU %.2f ms",studio.frameRate,studio.gpuFrameMilliseconds))
+                if studio.outputProtection != .normal {
+                    Label(localization.text(studio.outputProtection.localizationKey),systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+            .font(.caption.monospaced()).foregroundStyle(.white)
+            .padding(8).background(.black.opacity(0.7),in: RoundedRectangle(cornerRadius: 8)).padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 0)
     }
 
     private var inspector: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(localization.text(.monitor)).font(.headline)
+            Picker(localization.text(.qualityProfile), selection: $studio.qualityProfile) {
+                Text(localization.text(.liveFast)).tag(LiveQualityProfile.liveFast)
+                Text(localization.text(.liveQuality)).tag(LiveQualityProfile.liveQuality)
+                Text(localization.text(.reviewCinema)).tag(LiveQualityProfile.reviewCinema)
+            }.disabled(isProduction)
+            Picker(localization.text(.inputEncoding), selection: $studio.inputEncoding) {
+                Text(localization.text(.automaticInput)).tag(SDRInputEncoding.automatic)
+                Text("sRGB").tag(SDRInputEncoding.sRGB)
+                Text("Rec.709").tag(SDRInputEncoding.rec709)
+                Text(localization.text(.linearInput)).tag(SDRInputEncoding.linear)
+            }.disabled(isProduction)
+            Picker(localization.text(.debugPass), selection: $studio.debugView) {
+                Text(localization.text(.compositePass)).tag(CompositeDebugView.composite)
+                Text(localization.text(.scenePass)).tag(CompositeDebugView.scene)
+                Text(localization.text(.videoPass)).tag(CompositeDebugView.video)
+                Text(localization.text(.mattePass)).tag(CompositeDebugView.matte)
+            }.disabled(isProduction)
+            Button(localization.text(.loadCalibration),systemImage: "camera.metering.matrix") { chooseAsset(isScene: false) }
+                .disabled(isProduction)
+            Button(localization.text(.resetTrackingOrigin),systemImage: "scope") { studio.resetTrackingOrigin() }
+                .disabled(isProduction)
+            if let calibration = studio.cameraCalibration {
+                HStack {
+                    Text(calibration.name).font(.caption).lineLimit(1).help(calibration.name)
+                    Button { studio.clearCalibration() } label: { Image(systemName: "xmark.circle") }
+                        .help(localization.text(.clearCalibration)).accessibilityLabel(localization.text(.clearCalibration))
+                        .disabled(isProduction)
+                }
+            }
+            chromaControl(localization.text(.focusDistance),value: $studio.focusDistanceMeters,range: 0.1...20)
+                .disabled(studio.cameraCalibration?.breathing.isEmpty != false || isProduction)
             metric(localization.text(.renderer), studio.rendererStatus.text(localization))
             metric(localization.text(.tracking), localization.text(trackingQualityKey))
             metric(localization.text(.frameRate), String(format: "%.1f fps", studio.frameRate))
@@ -209,6 +255,9 @@ struct StudioView: View {
             metric(localization.text(.clockOffset), String(format: "%.2f ms", studio.clockOffsetMilliseconds))
             metric(localization.text(.networkRTT), String(format: "%.2f ms", studio.networkRoundTripMilliseconds))
             metric(localization.text(.networkJitter), String(format: "%.2f ms", studio.networkJitterMilliseconds))
+            metric(localization.text(.clockUncertainty), studio.clockUncertaintyMilliseconds.map { String(format: "%.2f ms", $0) } ?? "—")
+            metric(localization.text(.depthConfidence), studio.depthConfidencePercent.map { String(format: "%.1f%%", $0) } ?? "—")
+            metric(localization.text(.trackingReason), studio.trackingReason.map { localization.trackingReason($0) } ?? "—")
             metric(localization.text(.clockDrift), String(format: "%.1f ppm", studio.clockDriftPartsPerMillion))
             metric(localization.text(.gpuFrameTime), String(format: "%.2f ms", studio.gpuFrameMilliseconds))
             metric(localization.text(.droppedFrames), String(studio.droppedFrameEstimate))
@@ -238,7 +287,9 @@ struct StudioView: View {
             )
             .disabled(!studio.chromaKeyEnabled)
             focalLengthControl
+                .disabled(studio.cameraCalibration != nil || isProduction)
             radialDistortionControl
+                .disabled(studio.cameraCalibration != nil || isProduction)
             Spacer()
         }
         .padding(12)
@@ -251,8 +302,9 @@ struct StudioView: View {
                       systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             }
-            Label(studio.isRecording ? localization.text(.recording) : localization.text(.ready),
-                  systemImage: studio.isRecording ? "record.circle.fill" : "checkmark.circle")
+            Label(studio.outputProtection != .normal ? localization.text(studio.outputProtection.localizationKey) :
+                    studio.isRecording ? localization.text(.recording) : localization.text(.ready),
+                  systemImage: studio.outputProtection != .normal ? "shield.lefthalf.filled" : studio.isRecording ? "record.circle.fill" : "checkmark.circle")
             Spacer()
             Text(localization.text(.metalFrameGraph))
                 .foregroundStyle(.secondary)
@@ -267,6 +319,23 @@ struct StudioView: View {
         case .degraded: .stateDegraded
         case .estimated: .stateEstimated
         case .lost: .stateLost
+        }
+    }
+
+    private var isProduction: Bool { studio.mode == .live || studio.mode == .record }
+
+    private func chooseAsset(isScene: Bool) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = isScene ? [.json,UTType(filenameExtension: "gltf") ?? .json] : [.json]
+        panel.allowsOtherFileTypes = isScene
+        panel.title = localization.text(isScene ? .loadScene : .loadCalibration)
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task {
+                if isScene { await studio.loadScene(from: url) }
+                else { await studio.loadCalibration(from: url) }
+            }
         }
     }
 

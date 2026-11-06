@@ -8,6 +8,7 @@ public enum CaptureTransportPacket: Sendable, Equatable {
     case pose(CapturePosePacket)
     case clockProbe(CaptureClockProbe)
     case clockReply(CaptureClockReply)
+    case depth(CaptureDepthPacket)
 }
 
 public enum CaptureTransportCodecError: LocalizedError, Equatable {
@@ -33,6 +34,12 @@ public enum CaptureTransportPacketCodec {
     public static func encode(_ packet: CaptureTransportPacket) throws -> Data {
         var data = Data()
         switch packet {
+        case .depth(let packet):
+            try packet.validate()
+            data.append(6)
+            try appendLengthPrefixed(JSONEncoder().encode(packet.header), to: &data)
+            try appendLengthPrefixed(packet.depth, to: &data)
+            try appendLengthPrefixed(packet.confidence, to: &data)
         case .control(let envelope):
             let payload = try JSONEncoder().encode(envelope)
             data.append(controlMarker)
@@ -71,6 +78,11 @@ public enum CaptureTransportPacketCodec {
         }
         var reader = TransportReader(data: data.dropFirst())
         switch marker {
+        case 6:
+            let header = try JSONDecoder().decode(CaptureDepthFrameHeader.self, from: reader.readLengthPrefixedData())
+            let packet = try CaptureDepthPacket(header: header, depth: reader.readLengthPrefixedData(), confidence: reader.readLengthPrefixedData())
+            guard reader.isAtEnd else { throw CaptureTransportCodecError.malformedPacket }
+            return .depth(packet)
         case controlMarker:
             let payload = try reader.readLengthPrefixedData()
             guard reader.isAtEnd else { throw CaptureTransportCodecError.malformedPacket }

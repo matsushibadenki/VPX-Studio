@@ -19,7 +19,7 @@ public enum CaptureTrackingQuality: String, Codable, Sendable {
 }
 
 public struct CaptureNodeHello: Codable, Sendable, Equatable {
-    public static let currentProtocolVersion = 1
+    public static let currentProtocolVersion = 2
 
     public let protocolVersion: Int
     public let nodeID: UUID
@@ -49,6 +49,7 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
     public let isKeyFrame: Bool
     /// Optional, additive telemetry field. Older Nodes omit it.
     public let encodeCompletedNanoseconds: UInt64?
+    public let cameraMetadata: CaptureCameraMetadata?
 
     public init(
         sequence: UInt64,
@@ -57,7 +58,8 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
         height: UInt32,
         codec: String,
         isKeyFrame: Bool,
-        encodeCompletedNanoseconds: UInt64? = nil
+        encodeCompletedNanoseconds: UInt64? = nil,
+        cameraMetadata: CaptureCameraMetadata? = nil
     ) {
         self.sequence = sequence
         self.captureTimeNanoseconds = captureTimeNanoseconds
@@ -66,6 +68,7 @@ public struct CaptureVideoFrameHeader: Codable, Sendable, Equatable {
         self.codec = codec
         self.isKeyFrame = isKeyFrame
         self.encodeCompletedNanoseconds = encodeCompletedNanoseconds
+        self.cameraMetadata = cameraMetadata
     }
 }
 
@@ -97,6 +100,7 @@ public struct CapturePosePacket: Codable, Sendable, Equatable {
     public let angularVelocityRadiansPerSecond: [Float]
     public let quality: CaptureTrackingQuality
     public let referenceSpaceRevision: UInt64
+    public let accelerationMetersPerSecondSquared: [Float]?
 
     public init(
         sequence: UInt64,
@@ -106,7 +110,8 @@ public struct CapturePosePacket: Codable, Sendable, Equatable {
         linearVelocityMetersPerSecond: [Float],
         angularVelocityRadiansPerSecond: [Float],
         quality: CaptureTrackingQuality,
-        referenceSpaceRevision: UInt64
+        referenceSpaceRevision: UInt64,
+        accelerationMetersPerSecondSquared: [Float]? = nil
     ) {
         precondition(translationMeters.count == 3, "Translation requires three components.")
         precondition(rotationQuaternion.count == 4, "Quaternion requires four components.")
@@ -120,6 +125,7 @@ public struct CapturePosePacket: Codable, Sendable, Equatable {
         self.angularVelocityRadiansPerSecond = angularVelocityRadiansPerSecond
         self.quality = quality
         self.referenceSpaceRevision = referenceSpaceRevision
+        self.accelerationMetersPerSecondSquared = accelerationMetersPerSecondSquared
     }
 }
 
@@ -365,6 +371,8 @@ public enum CaptureMessageKind: String, Codable, Sendable {
     case hello
     case clockSample
     case control
+    case telemetryOffer
+    case qualityEvent
 }
 
 public struct CaptureVideoProfile: Codable, Sendable, Equatable {

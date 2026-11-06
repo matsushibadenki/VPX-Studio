@@ -37,6 +37,7 @@ public final class IPhoneHEVCVideoEncoder {
     private var encodedWidth: Int32 = 0
     private var encodedHeight: Int32 = 0
     private var shouldForceKeyFrame = true
+    private let stateLock = NSRecursiveLock()
 
     public init(profile: CaptureVideoProfile = .uhd60HEVC) throws {
         guard profile.codec == "hvc1" else {
@@ -50,6 +51,7 @@ public final class IPhoneHEVCVideoEncoder {
     }
 
     public func encode(pixelBuffer: CVPixelBuffer, header: CaptureVideoFrameHeader) throws {
+        stateLock.lock(); defer { stateLock.unlock() }
         let width = Int32(CVPixelBufferGetWidth(pixelBuffer))
         let height = Int32(CVPixelBufferGetHeight(pixelBuffer))
         try prepareSessionIfNeeded(width: width, height: height)
@@ -79,16 +81,19 @@ public final class IPhoneHEVCVideoEncoder {
     }
 
     public func requestKeyFrame() {
+        stateLock.lock(); defer { stateLock.unlock() }
         shouldForceKeyFrame = true
     }
 
     public func completeFrames() {
+        stateLock.lock(); defer { stateLock.unlock() }
         if let compressionSession {
             VTCompressionSessionCompleteFrames(compressionSession, untilPresentationTimeStamp: .invalid)
         }
     }
 
     public func invalidate() {
+        stateLock.lock(); defer { stateLock.unlock() }
         guard let compressionSession else { return }
         VTCompressionSessionCompleteFrames(compressionSession, untilPresentationTimeStamp: .invalid)
         VTCompressionSessionInvalidate(compressionSession)
@@ -186,7 +191,8 @@ public final class IPhoneHEVCVideoEncoder {
             height: pendingFrame.header.height,
             codec: "hvc1",
             isKeyFrame: isKeyFrame,
-            encodeCompletedNanoseconds: DispatchTime.now().uptimeNanoseconds
+            encodeCompletedNanoseconds: DispatchTime.now().uptimeNanoseconds,
+            cameraMetadata: pendingFrame.header.cameraMetadata
         )
         onEncodedFrame?(
             CaptureEncodedVideoFrame(

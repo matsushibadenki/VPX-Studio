@@ -20,6 +20,13 @@ public enum CaptureSecureChannelState: Sendable, Equatable {
 /// Callbacks must configure the channel before start, or dispatch their own UI
 /// work to the appropriate actor.
 public final class CaptureSecureChannel: @unchecked Sendable {
+    public let connectionID = UUID()
+    public var remoteHost: NWEndpoint.Host? {
+        if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint { return host }
+        if case .hostPort(let host, _) = connection.endpoint { return host }
+        return nil
+    }
+    public var onDepthPacket: ((CaptureDepthPacket) -> Void)?
     public var onControlPacket: ((CaptureMessageEnvelope) -> Void)?
     public var onVideoFrame: ((CaptureEncodedVideoFrame) -> Void)?
     public var onPosePacket: ((CapturePosePacket) -> Void)?
@@ -62,7 +69,7 @@ public final class CaptureSecureChannel: @unchecked Sendable {
             self?.onStateChanged?(Self.map(state))
         }
         connection.start(queue: queue)
-        receiveNext()
+        queue.async { [weak self] in self?.receiveNext() }
     }
 
     public func sendControl(_ envelope: CaptureMessageEnvelope) throws {
@@ -76,6 +83,8 @@ public final class CaptureSecureChannel: @unchecked Sendable {
     public func sendPose(_ pose: CapturePosePacket) throws {
         try send(.pose(pose))
     }
+
+    public func sendDepth(_ packet: CaptureDepthPacket) throws { try send(.depth(packet)) }
 
     public func sendClockProbe(_ probe: CaptureClockProbe) throws {
         try send(.clockProbe(probe))
@@ -124,6 +133,8 @@ public final class CaptureSecureChannel: @unchecked Sendable {
             }
             if !isComplete {
                 self.receiveNext()
+            } else {
+                self.cancel()
             }
         }
     }
@@ -132,6 +143,7 @@ public final class CaptureSecureChannel: @unchecked Sendable {
         for encryptedPacket in try streamDecoder.append(content) {
             let clearPacket = try protector.openPayload(encryptedPacket)
             switch try CaptureTransportPacketCodec.decode(clearPacket) {
+            case .depth(let packet): onDepthPacket?(packet)
             case .control(let envelope): onControlPacket?(envelope)
             case .video(let frame): onVideoFrame?(frame)
             case .pose(let pose): onPosePacket?(pose)

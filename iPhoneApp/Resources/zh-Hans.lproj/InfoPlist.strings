@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "使用相机采集视频、AR跟踪和LiDAR深度，并发送至已配对的VPX Studio Mac。";
+"NSMotionUsageDescription" = "将可选的设备旋转和加速度数据发送至已配对的VPX Studio Mac。";
+"NSLocalNetworkUsageDescription" = "查找并连接VPX Studio Mac，通过Wi-Fi发送视频和跟踪数据。";

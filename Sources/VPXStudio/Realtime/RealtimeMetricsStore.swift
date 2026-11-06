@@ -4,6 +4,10 @@ import QuartzCore
 import IOSurface
 
 struct RealtimeMetricsSnapshot: Codable, Sendable {
+    var protection = OutputProtection.normal
+    var gpuProtected = false
+    var gpuDeadlineMisses: UInt64 = 0
+    var inputFormats: [String: InputFormatPerformance] = [:]
     var pipeline = PipelineMeasurements()
     var inputHealth: VideoInputHealth = .missing
     var frameRate: Double = 0
@@ -25,6 +29,31 @@ final class RealtimeMetricsStore: @unchecked Sendable {
     private var lastReceiveTime: Double?
     private var seenBuffers: [UInt] = []
     private var seenSurfaces: [UInt32] = []
+    private var gpuMonitor = GPUDeadlineMonitor()
+
+    func recordProtection(_ protection: OutputProtection) {
+        lock.lock(); snapshot.protection = protection; lock.unlock()
+    }
+
+    func recordFormatImport(format: String, milliseconds: Double, budget: Double) {
+        guard milliseconds.isFinite, milliseconds >= 0 else { return }
+        lock.lock(); defer { lock.unlock() }
+        var stats = snapshot.inputFormats[format] ?? InputFormatPerformance()
+        stats.importSamples &+= 1; stats.importMilliseconds = milliseconds
+        stats.maximumImportMilliseconds = max(stats.maximumImportMilliseconds,milliseconds)
+        if milliseconds > budget { stats.importBudgetMisses &+= 1 }
+        snapshot.inputFormats[format] = stats
+    }
+
+    func recordFormatConversion(format: String, start: Double, end: Double, budget: Double) {
+        guard start > 0, let ms = FrameTelemetry.milliseconds(from: start,to: end) else { return }
+        lock.lock(); defer { lock.unlock() }
+        var stats = snapshot.inputFormats[format] ?? InputFormatPerformance()
+        stats.conversionSamples &+= 1; stats.conversionMilliseconds = ms
+        stats.maximumConversionMilliseconds = max(stats.maximumConversionMilliseconds,ms)
+        if ms > budget { stats.conversionBudgetMisses &+= 1 }
+        snapshot.inputFormats[format] = stats
+    }
 
     func recordInput(_ frame: VideoFrame, renderTime: Double, importMilliseconds: Double) {
         lock.lock()
@@ -70,12 +99,14 @@ final class RealtimeMetricsStore: @unchecked Sendable {
         lock.unlock()
     }
 
-    func recordFrameSubmitted(at time: CFTimeInterval, inputFrame: VideoFrame?) {
+    func recordFrameSubmitted(at time: CFTimeInterval, inputFrame: VideoFrame?, timeoutSeconds: Double = 0.5,
+                              expectedFramesPerSecond: Double = 60) {
         lock.lock()
         defer { lock.unlock() }
 
-        if let previousFrameStart, time - previousFrameStart > (1.0 / 60.0) * 1.5 {
-            snapshot.droppedFrameEstimate += UInt64((time - previousFrameStart) * 60.0) - 1
+        let fps = expectedFramesPerSecond.isFinite && expectedFramesPerSecond > 0 ? expectedFramesPerSecond : 60
+        if let previousFrameStart, time - previousFrameStart > (1.0 / fps) * 1.5 {
+            snapshot.droppedFrameEstimate += UInt64((time - previousFrameStart) * fps) - 1
         }
         previousFrameStart = time
         snapshot.renderedFrameCount += 1
@@ -91,7 +122,8 @@ final class RealtimeMetricsStore: @unchecked Sendable {
         if let inputFrame {
             let hostNow = CMClockGetTime(CMClockGetHostTimeClock())
             let age = CMTimeSubtract(hostNow, inputFrame.hostReceiveTime)
-            snapshot.inputHealth = .evaluate(ageSeconds: CMTimeGetSeconds(age), qualityLost: inputFrame.quality == .lost)
+            snapshot.inputHealth = .evaluate(ageSeconds: CMTimeGetSeconds(age), qualityLost: inputFrame.quality == .lost, timeoutSeconds: timeoutSeconds,
+                captureAgeSeconds: inputFrame.telemetry.captured.map { CMTimeGetSeconds(hostNow)-$0 })
             snapshot.inputAgeMilliseconds = max(0, CMTimeGetSeconds(age) * 1_000)
         } else {
             snapshot.inputHealth = .missing
@@ -108,10 +140,13 @@ final class RealtimeMetricsStore: @unchecked Sendable {
         }
     }
 
-    func recordGPUCompletion(start: CFTimeInterval, end: CFTimeInterval) {
+    func recordGPUCompletion(start: CFTimeInterval, end: CFTimeInterval, budget: Double = 1000/60) {
         guard end >= start, start > 0 else { return }
         lock.lock()
         snapshot.gpuFrameMilliseconds = (end - start) * 1_000
+        gpuMonitor.record(milliseconds: snapshot.gpuFrameMilliseconds,budget: budget)
+        snapshot.gpuProtected = gpuMonitor.isProtected
+        if snapshot.gpuFrameMilliseconds > budget { snapshot.gpuDeadlineMisses &+= 1 }
         lock.unlock()
     }
 
@@ -120,4 +155,15 @@ final class RealtimeMetricsStore: @unchecked Sendable {
         defer { lock.unlock() }
         return snapshot
     }
+}
+
+struct InputFormatPerformance: Codable, Sendable {
+    var importSamples: UInt64 = 0
+    var importMilliseconds: Double = 0
+    var maximumImportMilliseconds: Double = 0
+    var importBudgetMisses: UInt64 = 0
+    var conversionSamples: UInt64 = 0
+    var conversionMilliseconds: Double = 0
+    var maximumConversionMilliseconds: Double = 0
+    var conversionBudgetMisses: UInt64 = 0
 }

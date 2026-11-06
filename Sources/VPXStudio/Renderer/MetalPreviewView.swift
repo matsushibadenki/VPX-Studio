@@ -9,6 +9,7 @@ struct MetalPreviewView: NSViewRepresentable {
     let chromaGreenSoftness: Float
     let focalLengthMillimeters: Float
     let radialDistortionK1: Float
+    var renderSettings = StudioRenderSettings()
 
     func makeNSView(context: Context) -> MTKView {
         let view = MTKView()
@@ -33,6 +34,8 @@ struct MetalPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: MTKView, context: Context) {
+        nsView.preferredFramesPerSecond = Int(renderSettings.profile.framesPerSecond)
+        context.coordinator.renderer?.configure(renderSettings)
         context.coordinator.renderer?.setChromaKey(
             enabled: chromaKeyEnabled,
             greenThreshold: chromaGreenThreshold,

@@ -2,7 +2,7 @@ import Foundation
 
 /// Main-actor owned by StudioModel. Records transitions rather than every poll.
 struct DiagnosticsEventHistory {
-    enum Stream: String, Codable, Sendable { case videoInput, clock, tracking }
+    enum Stream: String, Codable, Sendable { case videoInput, clock, tracking, gpu, protection }
 
     struct Event: Codable, Equatable, Sendable {
         let sequence: UInt64

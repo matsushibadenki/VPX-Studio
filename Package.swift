@@ -25,6 +25,7 @@ let package = Package(
             dependencies: ["VPXCaptureProtocol"],
             resources: [
                 .copy("Resources/PreviewShaders.metal"),
+                .copy("Resources/StudioPipeline.metal"),
                 .process("Resources/LocalizationCatalog.json")
             ]
         ),

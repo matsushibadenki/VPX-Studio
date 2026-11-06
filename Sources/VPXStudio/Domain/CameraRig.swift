@@ -19,6 +19,18 @@ struct CameraRig {
     var sensor: Sensor
     var lens: Lens
     var worldFromCamera: simd_float4x4
+    var calibration: CameraCalibration?
+
+    func projection(aspectRatio: Float) -> simd_float4x4 {
+        if let c = calibration {
+            let focal = c.focalLength(at: lens.focusDistanceMeters, fallback: lens.focalLengthMillimeters)
+            let scale = focal / c.referenceFocalLengthMillimeters
+            return CameraProjection.perspective(fx: c.fx*scale, fy: c.fy*scale, cx: c.cx, cy: c.cy,
+                                                width: c.imageWidth, height: c.imageHeight)
+        }
+        let fy = 1 / tan(verticalFieldOfViewRadians/2)
+        return CameraProjection.perspective(fx: fy/aspectRatio, fy: fy, cx: 1, cy: 1, width: 2, height: 2)
+    }
 
     var verticalFieldOfViewRadians: Float {
         2 * atan(sensor.heightMillimeters / (2 * lens.focalLengthMillimeters))

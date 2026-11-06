@@ -8,6 +8,7 @@ struct DiagnosticsHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var nodeFilter = ""
     @State private var showsMeasurements = true
+    @State private var showsFormatMeasurements = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -37,6 +38,18 @@ struct DiagnosticsHistoryView: View {
             DisclosureGroup(localization.text(.pipelineMeasurements), isExpanded: $showsMeasurements) {
                 PipelineMeasurementsView(values: studio.pipelineMeasurements, poseAge: studio.poseCaptureAgeMilliseconds,
                                          localization: localization)
+            }
+            DisclosureGroup(localization.text(.formatMeasurements), isExpanded: $showsFormatMeasurements) {
+                VStack(alignment: .leading,spacing: 6) {
+                    Text("\(localization.text(.importBudget)): 2 ms · \(localization.text(.conversionBudget)): \(studio.qualityProfile.conversionBudgetMilliseconds, specifier: "%.0f") ms")
+                    ForEach(studio.inputFormatMeasurements.keys.sorted(),id: \.self) { format in
+                        if let values = studio.inputFormatMeasurements[format] {
+                            Text("0x\(format) · \(localization.text(.textureImport)) \(values.importMilliseconds, specifier: "%.3f") ms · \(localization.text(.conversionDuration)) \(values.conversionMilliseconds, specifier: "%.3f") ms")
+                            Text("\(localization.text(.budgetMisses)): \(values.importBudgetMisses) / \(values.conversionBudgetMisses)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }.font(.caption.monospaced())
             }
             Picker(localization.text(.sources), selection: $nodeFilter) {
                 Text(localization.text(.sources)).tag("")
@@ -75,6 +88,8 @@ struct DiagnosticsHistoryView: View {
             HStack {
                 Text(localization.text(.discardedEvents))
                 Text(studio.discardedDiagnosticEventCount, format: .number).monospacedDigit()
+                Spacer()
+                Text("\(localization.text(.budgetMisses)) GPU: \(studio.gpuDeadlineMissCount)")
             }
             .font(.caption).foregroundStyle(.secondary)
         }
@@ -90,10 +105,18 @@ struct DiagnosticsHistoryView: View {
     }
 
     private func streamText(_ stream: DiagnosticsEventHistory.Stream) -> String {
-        localization.text(stream == .videoInput ? .sources : stream == .clock ? .clock : .tracking)
+        let key: LocalizationKey = switch stream {
+        case .videoInput: .sources
+        case .clock: .clock
+        case .tracking: .tracking
+        case .gpu: .gpuFrameTime
+        case .protection: .outputProtection
+        }
+        return localization.text(key)
     }
 
     private func stateText(_ state: String) -> String {
+        if let protection = OutputProtection(rawValue: state) { return localization.text(protection.localizationKey) }
         let key: LocalizationKey? = switch state {
         case "active", "nominal": .stateCurrent
         case "stale": .stateStale

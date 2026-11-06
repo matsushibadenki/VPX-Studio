@@ -1,0 +1,35 @@
+name: VPXIPhoneCapture
+options:
+  deploymentTarget:
+    iOS: "18.0"
+  knownRegions: [en, ja, zh-Hans, Base]
+packages:
+  VPXStudio:
+    path: ..
+targets:
+  VPXIPhoneCapture:
+    type: application
+    platform: iOS
+    sources:
+      - path: ../Sources/VPXIPhoneCaptureApp/VPXIPhoneCaptureApp.swift
+      - path: Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vpxstudio.capture
+        PRODUCT_NAME: VPXIPhoneCapture
+        PRODUCT_MODULE_NAME: VPXIPhoneCaptureApplication
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+    dependencies:
+      - package: VPXStudio
+        product: VPXIPhoneCapture
+schemes:
+  VPXIPhoneCapture:
+    build:
+      targets:
+        VPXIPhoneCapture: all

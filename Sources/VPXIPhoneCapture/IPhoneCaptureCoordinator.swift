@@ -1,6 +1,7 @@
 #if os(iOS)
 @preconcurrency import ARKit
 import CoreMotion
+import AVFoundation
 import Foundation
 import simd
 import VPXCaptureProtocol
@@ -25,11 +26,25 @@ public final class IPhoneCaptureCoordinator: NSObject {
     public var onDepthSample: ((CaptureDepthSample) -> Void)?
     public var onTrackingQualityChanged: ((CaptureTrackingQuality) -> Void)?
     public var onEncodingError: ((Error) -> Void)?
+    public var onDepthPacket: ((CaptureDepthPacket) -> Void)?
+    public var onQualityEvent: ((CaptureQualityEvent) -> Void)?
+    public static var supportsDepth: Bool { ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) }
+    public static var supportsTracking: Bool { ARWorldTrackingConfiguration.isSupported }
+    public var supportsMotion: Bool { motionManager.isDeviceMotionAvailable && CMMotionActivityManager.authorizationStatus() != .denied && CMMotionActivityManager.authorizationStatus() != .restricted }
 
     public let session = ARSession()
     private let motionManager = CMMotionManager()
     private let motionQueue = OperationQueue()
     private var latestAngularVelocity = SIMD3<Float>(repeating: 0)
+    private var latestAcceleration = SIMD3<Float>(repeating: 0)
+    private let motionLock = NSLock()
+    private var motionTimestamp: TimeInterval = 0
+    private let captureQueue = DispatchQueue(label: "com.vpxstudio.arkit")
+    private let videoCapture = IPhoneVideoCapture()
+    private var qualitySequence: UInt64 = 0
+    private var lastReason: CaptureQualityEvent.Reason?
+    private var lastDepthTime: UInt64 = 0
+    private var capturingAR = false
     private var previousTranslation: SIMD3<Float>?
     private var previousPoseTimestampNanoseconds: UInt64?
     private var frameSequence: UInt64 = 0
@@ -40,23 +55,43 @@ public final class IPhoneCaptureCoordinator: NSObject {
     public override init() {
         super.init()
         session.delegate = self
+        session.delegateQueue = captureQueue
+        videoCapture.onSample = { [weak self] sample in
+            guard let self else { return }
+            onVideoSample?(sample)
+            do { try videoEncoder?.encode(pixelBuffer: sample.pixelBuffer, header: sample.header) }
+            catch { onEncodingError?(error) }
+        }
+        videoCapture.onFailure = { [weak self] error in self?.onEncodingError?(error) }
     }
 
-    public func start(enableDepth: Bool) {
-        let configuration = ARWorldTrackingConfiguration()
-        if enableDepth,
-           ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
-            configuration.frameSemantics.insert(.sceneDepth)
+    public func start(enableDepth: Bool, enableTracking: Bool = true) {
+        guard enableTracking, Self.supportsTracking else { videoCapture.start(); return }
+        captureQueue.sync {
+            capturingAR = true
+            let configuration = ARWorldTrackingConfiguration()
+            if enableDepth,
+               ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+                configuration.frameSemantics.insert(.sceneDepth)
+            }
+            session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+            referenceSpaceRevision &+= 1
+            startMotionUpdates()
         }
-        session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
-        referenceSpaceRevision &+= 1
-        startMotionUpdates()
     }
 
     public func stop() {
-        session.pause()
-        motionManager.stopDeviceMotionUpdates()
-        videoEncoder?.completeFrames()
+        videoCapture.stop()
+        captureQueue.sync {
+            capturingAR = false
+            publishQualityIfNeeded(.lost, reason: .disconnected)
+            session.pause()
+            motionManager.stopDeviceMotionUpdates()
+            videoEncoder?.completeFrames()
+            previousTranslation = nil
+            previousPoseTimestampNanoseconds = nil
+            lastDepthTime = 0
+        }
     }
 
     public func startHEVCEncoding(profile: CaptureVideoProfile = .uhd60HEVC) throws {
@@ -80,25 +115,39 @@ public final class IPhoneCaptureCoordinator: NSObject {
     }
 
     private func startMotionUpdates() {
-        guard motionManager.isDeviceMotionAvailable else { return }
+        guard supportsMotion else { publishQualityIfNeeded(.limited, reason: .motionUnavailable); return }
         motionManager.deviceMotionUpdateInterval = 1.0 / 120.0
         motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in
-            guard let motion else { return }
-            self?.latestAngularVelocity = SIMD3(
+            guard let self, let motion else { return }
+            motionLock.lock()
+            latestAngularVelocity = SIMD3(
                 Float(motion.rotationRate.x),
                 Float(motion.rotationRate.y),
                 Float(motion.rotationRate.z)
             )
+            latestAcceleration=SIMD3(Float(motion.userAcceleration.x)*9.80665, Float(motion.userAcceleration.y)*9.80665, Float(motion.userAcceleration.z)*9.80665)
+            motionTimestamp=motion.timestamp
+            motionLock.unlock()
         }
     }
 }
 
 extension IPhoneCaptureCoordinator: ARSessionDelegate {
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        guard capturingAR else { return }
         frameSequence &+= 1
         let timestamp = monotonicNanoseconds(frame.timestamp)
         let quality = trackingQuality(for: frame.camera.trackingState)
-        publishQualityIfNeeded(quality)
+        let reason = trackingReason(for: frame.camera.trackingState)
+        if reason == .relocalizing, lastReason != .relocalizing {
+            referenceSpaceRevision &+= 1; previousTranslation=nil; previousPoseTimestampNanoseconds=nil
+        }
+        publishQualityIfNeeded(quality, reason: reason)
+        motionLock.lock()
+        let freshMotion=abs(frame.timestamp-motionTimestamp) < 0.05
+        let angular=freshMotion ? latestAngularVelocity : .zero
+        let acceleration=freshMotion ? [latestAcceleration.x, latestAcceleration.y, latestAcceleration.z] : nil
+        motionLock.unlock()
 
         let transform = frame.camera.transform
         let rotation = simd_quatf(transform)
@@ -112,9 +161,10 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
                 translation: translation,
                 timestampNanoseconds: timestamp
             ),
-            angularVelocityRadiansPerSecond: [latestAngularVelocity.x, latestAngularVelocity.y, latestAngularVelocity.z],
+            angularVelocityRadiansPerSecond: [angular.x, angular.y, angular.z],
             quality: quality,
-            referenceSpaceRevision: referenceSpaceRevision
+            referenceSpaceRevision: referenceSpaceRevision,
+            accelerationMetersPerSecondSquared: acceleration
         )
         onPose?(pose)
 
@@ -125,7 +175,9 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
             width: UInt32(CVPixelBufferGetWidth(image)),
             height: UInt32(CVPixelBufferGetHeight(image)),
             codec: "raw-cv-pixel-buffer",
-            isKeyFrame: true
+            isKeyFrame: true,
+            cameraMetadata: IPhoneVideoCapture.metadata(image, cameraID: "arkit.back", source: "arkit",
+                intrinsics: (0..<3).flatMap { column in (0..<3).map { frame.camera.intrinsics[column][$0] } })
         )
         onVideoSample?(CaptureVideoSample(header: header, pixelBuffer: image))
         do {
@@ -140,7 +192,7 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
                 captureTimeNanoseconds: timestamp,
                 width: UInt32(CVPixelBufferGetWidth(sceneDepth.depthMap)),
                 height: UInt32(CVPixelBufferGetHeight(sceneDepth.depthMap)),
-                depthEncoding: "depth-float32",
+                depthEncoding: "depth-float32-le",
                 confidenceEncoding: "confidence-uint8"
             )
             onDepthSample?(
@@ -150,19 +202,30 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
                     confidenceMap: sceneDepth.confidenceMap
                 )
             )
+            if timestamp >= lastDepthTime, timestamp-lastDepthTime >= 200_000_000,
+               let confidence=sceneDepth.confidenceMap {
+                do {
+                    let packet=try CaptureDepthPacket(header: depthHeader,
+                        depth: packed(sceneDepth.depthMap, bytesPerPixel: 4), confidence: packed(confidence, bytesPerPixel: 1))
+                    onDepthPacket?(packet); lastDepthTime=timestamp
+                } catch { onEncodingError?(error) }
+            }
         }
     }
 
     public func session(_ session: ARSession, didFailWithError error: Error) {
-        publishQualityIfNeeded(.lost)
+        publishQualityIfNeeded(.lost, reason: .failed)
+        onEncodingError?(error)
     }
 
     public func sessionWasInterrupted(_ session: ARSession) {
-        publishQualityIfNeeded(.lost)
+        publishQualityIfNeeded(.lost, reason: .interrupted)
     }
 
     public func sessionInterruptionEnded(_ session: ARSession) {
         referenceSpaceRevision &+= 1
+        previousTranslation=nil; previousPoseTimestampNanoseconds=nil
+        publishQualityIfNeeded(.limited, reason: .interruptionEnded)
     }
 
     private func trackingQuality(for state: ARCamera.TrackingState) -> CaptureTrackingQuality {
@@ -173,10 +236,37 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
         }
     }
 
-    private func publishQualityIfNeeded(_ quality: CaptureTrackingQuality) {
-        guard quality != lastQuality else { return }
+    private func trackingReason(for state: ARCamera.TrackingState) -> CaptureQualityEvent.Reason {
+        switch state {
+        case .normal: return .normal
+        case .notAvailable: return .initializing
+        case .limited(let reason):
+            switch reason {
+            case .initializing: return .initializing
+            case .excessiveMotion: return .excessiveMotion
+            case .insufficientFeatures: return .insufficientFeatures
+            case .relocalizing: return .relocalizing
+            @unknown default: return .initializing
+            }
+        }
+    }
+    private func packed(_ buffer: CVPixelBuffer, bytesPerPixel: Int) -> Data {
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        guard let base=CVPixelBufferGetBaseAddress(buffer) else { return Data() }
+        var data=Data()
+        for row in 0..<CVPixelBufferGetHeight(buffer) {
+            data.append(base.advanced(by: row*CVPixelBufferGetBytesPerRow(buffer)).assumingMemoryBound(to: UInt8.self), count: CVPixelBufferGetWidth(buffer)*bytesPerPixel)
+        }
+        return data
+    }
+    private func publishQualityIfNeeded(_ quality: CaptureTrackingQuality, reason: CaptureQualityEvent.Reason) {
+        guard quality != lastQuality || reason != lastReason else { return }
+        qualitySequence &+= 1; lastReason=reason
         lastQuality = quality
         onTrackingQualityChanged?(quality)
+        onQualityEvent?(CaptureQualityEvent(sequence: qualitySequence, captureTimeNanoseconds: DispatchTime.now().uptimeNanoseconds,
+            quality: quality, reason: reason, referenceSpaceRevision: referenceSpaceRevision))
     }
 
     private func monotonicNanoseconds(_ seconds: TimeInterval) -> UInt64 {

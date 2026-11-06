@@ -39,6 +39,7 @@ public final class CaptureNodeHostDiscovery: @unchecked Sendable {
             if case .failed(let error) = state {
                 self?.onFailure?(error)
             }
+            if case .waiting(let error) = state { self?.onFailure?(error) }
         }
         self.browser = browser
         browser.start(queue: queue)

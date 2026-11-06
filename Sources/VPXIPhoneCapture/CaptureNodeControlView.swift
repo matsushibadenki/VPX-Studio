@@ -3,6 +3,7 @@ import Observation
 import SwiftUI
 import UIKit
 import VisionKit
+import AVFoundation
 import VPXCaptureProtocol
 
 public enum CaptureNodeLanguage: String, CaseIterable, Identifiable {
@@ -33,7 +34,13 @@ public enum CaptureNodeConnectionStatus: Equatable {
 
 @MainActor @Observable
 public final class CaptureNodeSessionModel {
-    public var language: CaptureNodeLanguage = .english
+    public var language: CaptureNodeLanguage = {
+        switch Locale.current.language.languageCode?.identifier {
+        case "ja": return .japanese
+        case "zh": return .chineseSimplified
+        default: return .english
+        }
+    }()
     public var hosts: [CaptureNodeDiscoveredHost] = []
     public var selectedHostID: String?
     public var pairingPayload = ""
@@ -41,6 +48,13 @@ public final class CaptureNodeSessionModel {
     public private(set) var status: CaptureNodeConnectionStatus = .idle
     public private(set) var isCapturing = false
     public private(set) var errorMessage: String?
+    public var enableTracking = IPhoneCaptureCoordinator.supportsTracking
+    public var enableDepth = IPhoneCaptureCoordinator.supportsDepth
+    public var supportsDepth: Bool { IPhoneCaptureCoordinator.supportsDepth && enableTracking }
+    public var configurationLocked: Bool { channel != nil }
+    public private(set) var telemetryReady = false
+    public private(set) var requestingCamera = false
+    public private(set) var cameraDenied = false
 
     private let nodeID: UUID
     private let displayName: String
@@ -49,6 +63,8 @@ public final class CaptureNodeSessionModel {
     private let networkQueue = DispatchQueue(label: "com.vpxstudio.capture-node")
     private var credential: CapturePairingCredential?
     private var channel: CaptureSecureChannel?
+    private let transport = CaptureNodeTransport()
+    private var captureGeneration = UUID()
 
     public init(nodeID: UUID = UUID(), displayName: String = UIDevice.current.name) {
         self.nodeID = nodeID
@@ -63,22 +79,27 @@ public final class CaptureNodeSessionModel {
         }
         discovery.onFailure = { [weak self] error in
             Task { @MainActor [weak self] in
-                self?.fail(error)
+                guard let self else { return }
+                errorMessage=networkPermissionHint + "\n" + error.localizedDescription
+                if channel == nil { status = .failed(error.localizedDescription) }
             }
         }
+        let transport=self.transport
         coordinator.onEncodedVideoFrame = { [weak self] frame in
             do {
-                try self?.channel?.sendVideo(frame)
+                try transport.sendVideo(frame)
             } catch {
                 self?.failFromAnyQueue(error)
             }
         }
-        coordinator.onPose = { [weak self] pose in
-            do {
-                try self?.channel?.sendPose(pose)
-            } catch {
-                self?.failFromAnyQueue(error)
-            }
+        coordinator.onPose = { pose in
+            transport.sendPose(pose)
+        }
+        coordinator.onDepthPacket = { [weak self] packet in
+            do { try transport.sendDepth(packet) } catch { self?.failFromAnyQueue(error) }
+        }
+        coordinator.onQualityEvent = { [weak self] event in
+            do { try transport.sendQuality(event) } catch { self?.failFromAnyQueue(error) }
         }
         // A probe is answered on the same encrypted channel. Dispatch uptime
         // uses the device monotonic clock domain used by ARKit timestamps.
@@ -118,6 +139,8 @@ public final class CaptureNodeSessionModel {
             return
         }
 
+        stopCapture()
+        transport.setTelemetry(nil); telemetryReady=false
         channel?.cancel()
         let channel = CaptureSecureChannel(endpoint: host.endpoint, credential: credential)
         channel.onStateChanged = { [weak self, weak channel] state in
@@ -125,8 +148,11 @@ public final class CaptureNodeSessionModel {
                 self?.handleChannelState(state, channel: channel)
             }
         }
-        channel.onFailure = { [weak self] error in
-            self?.failFromAnyQueue(error)
+        channel.onFailure = { [weak self, weak channel] error in
+            Task { @MainActor [weak self, weak channel] in
+                guard let self, let channel, self.channel === channel else { return }
+                fail(error)
+            }
         }
         channel.onClockProbe = { [weak channel] probe in
             let receivedAt = DispatchTime.now().uptimeNanoseconds
@@ -137,27 +163,59 @@ public final class CaptureNodeSessionModel {
             )
             try? channel?.sendClockReply(reply)
         }
+        channel.onControlPacket = { [weak self, weak channel] envelope in
+            if envelope.kind == .control,
+               let command=try? envelope.decodePayload(CaptureNodeControlCommand.self), command.action == .requestKeyFrame {
+                Task { @MainActor [weak self, weak channel] in
+                    guard let self, let channel, self.channel === channel else { return }
+                    coordinator.requestVideoKeyFrame()
+                }
+                return
+            }
+            guard envelope.kind == .telemetryOffer,
+                  let offer=try? envelope.decodePayload(CaptureTelemetryOffer.self) else { return }
+            Task { @MainActor [weak self, weak channel] in
+                guard let self, let channel, self.channel === channel, let host=channel.remoteHost, offer.port != 0 else { return }
+                let udp=CaptureDatagramChannel(host: host, port: offer.port, credential: credential,
+                    nodeID: nodeID, connectionID: offer.connectionID, queue: networkQueue)
+                udp.onFailure = { [weak self, weak channel] error in
+                    Task { @MainActor [weak self, weak channel] in
+                        guard let self, let channel, self.channel === channel else { return }
+                        fail(error)
+                    }
+                }
+                transport.setTelemetry(udp); udp.start(); telemetryReady=true
+            }
+        }
         self.channel = channel
+        transport.setStream(channel)
         status = .connecting
         channel.start(on: networkQueue)
     }
 
     public func startCapture() {
-        guard channel != nil else {
+        guard channel != nil, telemetryReady else {
             fail(CaptureNodeSessionError.notConnected)
             return
         }
-        do {
-            try coordinator.startHEVCEncoding()
-            coordinator.start(enableDepth: true)
-            isCapturing = true
-            status = .capturing
-        } catch {
-            fail(error)
+        guard !requestingCamera, !isCapturing else { return }
+        let generation=UUID(); captureGeneration=generation; requestingCamera=true
+        Task { @MainActor [weak self] in
+            let granted = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+                ? true : await AVCaptureDevice.requestAccess(for: .video)
+            guard let self, captureGeneration == generation else { return }
+            requestingCamera=false; cameraDenied = !granted
+            guard granted else { errorMessage=permissionText; return }
+            do {
+                try coordinator.startHEVCEncoding()
+                coordinator.start(enableDepth: enableDepth && supportsDepth, enableTracking: enableTracking)
+                isCapturing=true; status = .capturing
+            } catch { fail(error) }
         }
     }
 
     public func stopCapture() {
+        captureGeneration=UUID(); requestingCamera=false
         coordinator.stop()
         coordinator.stopHEVCEncoding()
         isCapturing = false
@@ -168,6 +226,7 @@ public final class CaptureNodeSessionModel {
         stopCapture()
         channel?.cancel()
         channel = nil
+        transport.setStream(nil); transport.setTelemetry(nil); telemetryReady=false
         discovery.stop()
         status = .idle
     }
@@ -176,15 +235,16 @@ public final class CaptureNodeSessionModel {
         _ state: CaptureSecureChannelState,
         channel: CaptureSecureChannel?
     ) {
+        guard let channel, self.channel === channel else { return }
         switch state {
         case .ready:
             do {
                 let hello = CaptureNodeHello(
                     nodeID: nodeID,
                     displayName: displayName,
-                    capabilities: [.video, .pose, .imu, .depth, .timeSync]
+                    capabilities: capabilities
                 )
-                try channel?.sendControl(CaptureMessageEnvelope(kind: .hello, payload: hello))
+                try channel.sendControl(CaptureMessageEnvelope(kind: .hello, payload: hello))
                 status = .connected
             } catch {
                 fail(error)
@@ -192,22 +252,45 @@ public final class CaptureNodeSessionModel {
         case .failed(let message), .waiting(let message):
             fail(CaptureNodeSessionError.connection(message))
         case .cancelled:
-            if !isCapturing { status = .idle }
+            stopCapture(); transport.setTelemetry(nil); telemetryReady=false
+            self.channel=nil; transport.setStream(nil); status = .idle
         case .setup, .preparing:
             status = .connecting
         }
     }
 
-    private func failFromAnyQueue(_ error: Error) {
+    private nonisolated func failFromAnyQueue(_ error: Error) {
         Task { @MainActor [weak self] in
             self?.fail(error)
         }
     }
 
     private func fail(_ error: Error) {
-        isCapturing = false
+        stopCapture()
+        let old=channel; channel=nil; transport.setStream(nil); transport.setTelemetry(nil); telemetryReady=false; old?.cancel()
         errorMessage = error.localizedDescription
         status = .failed(error.localizedDescription)
+    }
+    private var capabilities: Set<CaptureNodeCapability> {
+        var result: Set<CaptureNodeCapability> = [.video, .timeSync, .lensMetadata]
+        if enableTracking && IPhoneCaptureCoordinator.supportsTracking {
+            result.insert(.pose)
+            if coordinator.supportsMotion { result.insert(.imu) }
+            if enableDepth && supportsDepth { result.insert(.depth) }
+        }
+        return result
+    }
+    private var permissionText: String {
+        switch language {
+        case .english: "Allow Camera in Settings to capture video. Motion is optional. Allow Local Network to find and connect to your Mac."
+        case .japanese: "撮影には設定でカメラを許可してください。モーションは任意です。Macの検索・接続にはローカルネットワークを許可してください。"
+        case .chineseSimplified: "请在设置中允许相机以采集视频。运动权限为可选。查找和连接Mac需要允许本地网络。"
+        }
+    }
+    public var networkPermissionHint: String { permissionText }
+    public func openSettings() {
+        guard let url=URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }
 
@@ -281,6 +364,10 @@ public struct CaptureNodeControlView: View {
             if let errorMessage = model.errorMessage {
                 Text(errorMessage).font(.footnote).foregroundStyle(.red)
             }
+            Button { model.openSettings() } label: { Image(systemName: "gearshape") }
+                .accessibilityLabel(text(.settings))
+                .help(model.networkPermissionHint)
+            if model.cameraDenied { Text(model.networkPermissionHint).font(.footnote) }
         }
     }
 
@@ -327,12 +414,15 @@ public struct CaptureNodeControlView: View {
 
     private var captureCard: some View {
         card(title: text(.capture)) {
+            Toggle(text(.tracking), isOn: $model.enableTracking)
+                .disabled(model.configurationLocked || !IPhoneCaptureCoordinator.supportsTracking)
+            Toggle(text(.depth), isOn: $model.enableDepth).disabled(model.configurationLocked || !model.supportsDepth)
             Button(model.isCapturing ? text(.stopCapture) : text(.startCapture)) {
                 model.isCapturing ? model.stopCapture() : model.startCapture()
             }
             .buttonStyle(.borderedProminent)
             .tint(model.isCapturing ? .red : .accentColor)
-            .disabled(!isConnected)
+            .disabled(!isConnected || !model.telemetryReady || model.requestingCamera)
         }
     }
 
@@ -342,7 +432,8 @@ public struct CaptureNodeControlView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
@@ -389,11 +480,13 @@ public struct CaptureNodeControlView: View {
         case title, subtitle, language, connection, host, findHosts, noHosts, connect
         case pairing, scanQR, pairingPayload, applyPairing, confirmCode
         case capture, startCapture, stopCapture
+        case tracking, depth, settings
         case idle, discovering, pairingReady, connecting, connected, capturing, failed
     }
 
     private func text(_ key: Key) -> String {
         let english: [Key: String] = [
+            .tracking: "AR Tracking", .depth: "LiDAR Depth", .settings: "Settings",
             .title: "Capture Node", .subtitle: "Secure iPhone input for VPX Studio", .language: "Language",
             .connection: "Connection", .host: "Mac Host", .findHosts: "Find Hosts", .noHosts: "No VPX Studio Hosts found.", .connect: "Connect",
             .pairing: "Pairing", .scanQR: "Scan QR Code", .pairingPayload: "Pairing QR payload", .applyPairing: "Apply Pairing", .confirmCode: "Verify this code on the Mac",
@@ -401,6 +494,7 @@ public struct CaptureNodeControlView: View {
             .idle: "Idle", .discovering: "Discovering Hosts", .pairingReady: "Pairing ready", .connecting: "Connecting", .connected: "Connected", .capturing: "Capturing", .failed: "Connection failed"
         ]
         let japanese: [Key: String] = [
+            .tracking: "ARトラッキング", .depth: "LiDAR深度", .settings: "設定",
             .title: "Capture Node", .subtitle: "VPX Studio用の安全なiPhone入力", .language: "言語",
             .connection: "接続", .host: "Mac Host", .findHosts: "Hostを検索", .noHosts: "VPX Studio Hostが見つかりません。", .connect: "接続",
             .pairing: "ペアリング", .scanQR: "QRコードをスキャン", .pairingPayload: "ペアリングQRペイロード", .applyPairing: "ペアリングを適用", .confirmCode: "Macに表示されたコードと照合してください",
@@ -408,6 +502,7 @@ public struct CaptureNodeControlView: View {
             .idle: "待機中", .discovering: "Hostを検索中", .pairingReady: "ペアリング準備完了", .connecting: "接続中", .connected: "接続済み", .capturing: "キャプチャ中", .failed: "接続に失敗しました"
         ]
         let chinese: [Key: String] = [
+            .tracking: "AR跟踪", .depth: "LiDAR深度", .settings: "设置",
             .title: "采集节点", .subtitle: "为VPX Studio提供安全的iPhone输入", .language: "语言",
             .connection: "连接", .host: "Mac主机", .findHosts: "查找主机", .noHosts: "未找到VPX Studio主机。", .connect: "连接",
             .pairing: "配对", .scanQR: "扫描二维码", .pairingPayload: "配对二维码内容", .applyPairing: "应用配对", .confirmCode: "请与Mac上显示的代码核对",

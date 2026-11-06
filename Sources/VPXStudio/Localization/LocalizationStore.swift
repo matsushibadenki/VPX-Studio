@@ -1,11 +1,20 @@
 import Foundation
+import VPXCaptureProtocol
 import Observation
 
 enum LocalizationKey: String {
+    case depthConfidence, clockUncertainty, trackingReason
+    case qualityNormal, qualityInitializing, qualityExcessiveMotion, qualityInsufficientFeatures, qualityRelocalizing, qualityInterrupted, qualityInterruptionEnded, qualityFailed, qualityDisconnected, qualityMotionUnavailable
     case videoInputStale
     case exportDiagnostics, diagnosticsExportFailed
     case archiveDiagnostics, stopArchive
     case runBenchmark
+    case loadScene, loadCalibration, assetImportFailed, focusDistance, qualityProfile, liveFast, liveQuality, reviewCinema
+    case clearCalibration
+    case resetTrackingOrigin
+    case inputEncoding, automaticInput, linearInput, debugPass, compositePass, scenePass, videoPass, mattePass
+    case outputProtection, trackingProtection, gpuProtection, unknownInputColor, unsupportedInputFormat
+    case formatMeasurements, importBudget, conversionBudget, conversionDuration, budgetMisses
     case pipelineMeasurements, captureReceive, receiveDecode, decodeDuration, renderWait, textureImport
     case captureEncode, networkTransport
     case presentationDelay, capturePresent, poseCaptureAge, residentMemory, knownCopies, bufferReuse, surfaceReuse
@@ -66,6 +75,22 @@ final class LocalizationStore {
         return selected?.translations[key.rawValue]
             ?? english?.translations[key.rawValue]
             ?? key.rawValue
+    }
+
+    func trackingReason(_ reason: CaptureQualityEvent.Reason) -> String {
+        let key: LocalizationKey = switch reason {
+        case .normal: .qualityNormal
+        case .initializing: .qualityInitializing
+        case .excessiveMotion: .qualityExcessiveMotion
+        case .insufficientFeatures: .qualityInsufficientFeatures
+        case .relocalizing: .qualityRelocalizing
+        case .interrupted: .qualityInterrupted
+        case .interruptionEnded: .qualityInterruptionEnded
+        case .failed: .qualityFailed
+        case .disconnected: .qualityDisconnected
+        case .motionUnavailable: .qualityMotionUnavailable
+        }
+        return text(key)
     }
 
     private static func loadCatalog() -> LocalizationCatalog {

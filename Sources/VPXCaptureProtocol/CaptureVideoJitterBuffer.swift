@@ -13,6 +13,7 @@ public struct CaptureVideoJitterBuffer: Sendable {
     public let maximumFrameCount: Int
     public private(set) var droppedFrameCount: UInt64 = 0
     private var entries: [Entry] = []
+    private var lastDeliveredSequence: UInt64?
 
     public init(
         targetDelayNanoseconds: Double = 50_000_000,
@@ -30,14 +31,15 @@ public struct CaptureVideoJitterBuffer: Sendable {
         clockDriftPartsPerMillion: Double = 0,
         referenceHostNanoseconds: Double = 0
     ) {
-        guard !entries.contains(where: { $0.frame.header.sequence == frame.header.sequence }) else {
+        guard lastDeliveredSequence.map({ frame.header.sequence > $0 }) ?? true,
+              !entries.contains(where: { $0.frame.header.sequence == frame.header.sequence }) else {
             droppedFrameCount &+= 1
             return
         }
-        let elapsed = Double(frame.header.captureTimeNanoseconds) - referenceHostNanoseconds
-        let effectiveOffset = nodeClockOffsetNanoseconds
-            + elapsed * clockDriftPartsPerMillion / 1_000_000
-        let presentationTime = Double(frame.header.captureTimeNanoseconds) - effectiveOffset
+        guard let presentationTime = CaptureClockMapping.hostTime(nodeTime: frame.header.captureTimeNanoseconds,
+            offset: nodeClockOffsetNanoseconds, driftPPM: clockDriftPartsPerMillion, reference: referenceHostNanoseconds) else {
+            droppedFrameCount &+= 1; return
+        }
         let entry = Entry(frame: frame, hostPresentationNanoseconds: presentationTime)
         let insertionIndex = entries.firstIndex {
             $0.hostPresentationNanoseconds > presentationTime
@@ -55,8 +57,13 @@ public struct CaptureVideoJitterBuffer: Sendable {
         let deadline = Double(hostNowNanoseconds) - targetDelayNanoseconds
         var ready: [CaptureEncodedVideoFrame] = []
         while let first = entries.first, first.hostPresentationNanoseconds <= deadline {
-            ready.append(first.frame)
             entries.removeFirst()
+            guard Double(hostNowNanoseconds)-first.hostPresentationNanoseconds <= 500_000_000,
+                  lastDeliveredSequence.map({ first.frame.header.sequence > $0 }) ?? true else {
+                droppedFrameCount &+= 1; continue
+            }
+            ready.append(first.frame)
+            lastDeliveredSequence=first.frame.header.sequence
         }
         return ready
     }
@@ -98,11 +105,8 @@ public struct CapturePoseJitterBuffer: Sendable {
             droppedPacketCount &+= 1
             return
         }
-        let elapsed = Double(pose.captureTimeNanoseconds) - referenceHostNanoseconds
-        let effectiveOffset = nodeClockOffsetNanoseconds
-            + elapsed * clockDriftPartsPerMillion / 1_000_000
-        let presentationTime = Double(pose.captureTimeNanoseconds) - effectiveOffset
-        guard presentationTime.isFinite, presentationTime >= 0,
+        guard let presentationTime = CaptureClockMapping.hostTime(nodeTime: pose.captureTimeNanoseconds,
+            offset: nodeClockOffsetNanoseconds, driftPPM: clockDriftPartsPerMillion, reference: referenceHostNanoseconds),
               lastDeliveredTime.map({ presentationTime > $0 }) ?? true else {
             droppedPacketCount &+= 1
             return

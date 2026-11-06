@@ -11,12 +11,12 @@ struct PoseHealth {
                                     to: Double(now) / 1_000_000_000)
     }
 
-    func effectiveQuality(now: UInt64, clock: ClockFreshness) -> StreamQuality {
+    func effectiveQuality(now: UInt64, clock: ClockFreshness, timeoutSeconds: Double = 0.5) -> StreamQuality {
         guard clock == .current, let lastAcceptedNanoseconds,
               now >= lastAcceptedNanoseconds,
-              now - lastAcceptedNanoseconds <= 500_000_000 else { return .lost }
+              Double(now - lastAcceptedNanoseconds) <= timeoutSeconds*1_000_000_000 else { return .lost }
         if capturedHostNanoseconds != nil {
-            guard let age = captureAgeMilliseconds(now: now), age <= 500 else { return .lost }
+            guard let age = captureAgeMilliseconds(now: now), age <= timeoutSeconds*1000 else { return .lost }
         }
         return quality
     }
