@@ -19,7 +19,7 @@ public enum CaptureTrackingQuality: String, Codable, Sendable {
 }
 
 public struct CaptureNodeHello: Codable, Sendable, Equatable {
-    public static let currentProtocolVersion = 2
+    public static let currentProtocolVersion = 4
 
     public let protocolVersion: Int
     public let nodeID: UUID
@@ -368,6 +368,7 @@ public struct CaptureClockSynchronizer: Sendable {
 }
 
 public enum CaptureMessageKind: String, Codable, Sendable {
+    case mediaControlResult
     case hello
     case clockSample
     case control
@@ -400,6 +401,7 @@ public struct CaptureVideoProfile: Codable, Sendable, Equatable {
 }
 
 public enum CaptureNodeControlAction: String, Codable, Sendable {
+    case suspendMedia, resumeMedia
     case startVideo
     case stopVideo
     case setVideoProfile

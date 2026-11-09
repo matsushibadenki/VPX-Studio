@@ -353,6 +353,23 @@ final class StudioModel {
     private var captureNodeHost: CaptureNodeBonjourHost?
     private var captureDepthBuffers: [UUID: CaptureDepthBuffer] = [:]
     private var captureQualityEvents: [UUID: CaptureQualityEvent] = [:]
+    private var nodeStatusHealth: [UUID: NodeStatusHealth] = [:]
+    private(set) var nodeMonitoring: [NodeMonitoringSnapshot] = []
+    private var mediaControls: [UUID: NodeMediaControl] = [:]
+    private var captureControlChannels: [UUID: CaptureSecureChannel] = [:]
+
+    func setNodeMediaSuspended(_ suspended: Bool, nodeID: UUID) {
+        guard let channel = captureControlChannels[nodeID],
+              captureConnections[nodeID] == channel.connectionID else { return }
+        var control = mediaControls[nodeID] ?? NodeMediaControl()
+        guard let command = control.request(suspend: suspended, now: DispatchTime.now().uptimeNanoseconds) else { return }
+        do { try channel.sendControl(CaptureMessageEnvelope(kind: .control, payload: command)) }
+        catch { control.fail() }
+        mediaControls[nodeID] = control
+        nodeMonitoring = monitoringSnapshots(now: DispatchTime.now().uptimeNanoseconds)
+    }
+    private(set) var admissionEvents: [NodeAdmissionEvent] = []
+    let admissionLimits = NodeAdmissionPolicy.Limits.standard
     private var captureConnections: [UUID: UUID] = [:]
     var depthConfidencePercent: Double?
     var clockUncertaintyMilliseconds: Double?
@@ -510,7 +527,34 @@ final class StudioModel {
         guard captureNodeHost == nil else { return }
         do {
             let credential = try CapturePairingCredential.create()
-            let host = CaptureNodeBonjourHost(credential: credential)
+            let host = CaptureNodeBonjourHost(credential: credential, limits: admissionLimits)
+            admissionEvents.removeAll()
+            host.onMediaControlResult = { [weak self, weak host] nodeID, connectionID, result in
+                Task { @MainActor [weak self, weak host] in
+                    guard let self, let host, captureNodeHost === host,
+                          captureConnections[nodeID] == connectionID,
+                          var control = mediaControls[nodeID] else { return }
+                    let accepted = control.complete(result, now: DispatchTime.now().uptimeNanoseconds)
+                    mediaControls[nodeID] = control
+                    guard accepted else { return }
+                    captureNodeSources[nodeID]?.setMediaSuspended(result.suspended)
+                    captureDepthBuffers.removeValue(forKey: nodeID)
+                    realtimeCore.latestVideoFrame.setSuspended(result.suspended, sourceID: nodeID, sessionID: connectionID)
+                    if !result.suspended {
+                        try? captureControlChannels[nodeID]?.sendControl(CaptureMessageEnvelope(kind: .control,
+                            payload: CaptureNodeControlCommand(action: .requestKeyFrame)))
+                    }
+                    nodeMonitoring = monitoringSnapshots(now: DispatchTime.now().uptimeNanoseconds)
+                }
+            }
+            host.onAdmissionRejected = { [weak self, weak host] hello, reason in
+                Task { @MainActor [weak self, weak host] in
+                    guard let self, let host, captureNodeHost === host else { return }
+                    admissionEvents.append(NodeAdmissionEvent(nodeID: hello.nodeID,
+                        name: String(hello.displayName.prefix(128)), reason: reason, occurredAt: Date()))
+                    if admissionEvents.count > 32 { admissionEvents.removeFirst(admissionEvents.count - 32) }
+                }
+            }
             host.onHello = { [weak self, weak host] hello, channel in
                 Task { @MainActor [weak self, weak host] in
                     guard let self, let host, captureNodeHost === host else { return }
@@ -526,6 +570,16 @@ final class StudioModel {
                 Task { @MainActor [weak self] in
                     guard let self, captureConnections[nodeID] == connectionID else { return }
                     switch payload {
+                    case .nodeStatus(let packet):
+                        let now = DispatchTime.now().uptimeNanoseconds
+                        guard let stats = clockStatistics[nodeID],
+                              let captured = HostClockMapping.hostTime(nodeNanoseconds: packet.captureTimeNanoseconds,
+                                offset: stats.nodeClockOffsetNanoseconds, driftPPM: stats.driftPartsPerMillion,
+                                referenceHost: stats.referenceHostNanoseconds) else { return }
+                        var health = nodeStatusHealth[nodeID] ?? NodeStatusHealth()
+                        health.accept(packet, capturedHost: captured, now: now,
+                            clock: .evaluate(lastAccepted: clockLastAccepted[nodeID], now: now))
+                        nodeStatusHealth[nodeID] = health
                     case .pose(let pose): recordPose(pose, from: nodeID)
                     case .diagnostic(let event):
                         guard captureQualityEvents[nodeID].map({ event.sequence > $0.sequence }) ?? true else { return }
@@ -548,6 +602,8 @@ final class StudioModel {
                     clockLastAccepted.removeValue(forKey: nodeID); clockStatistics.removeValue(forKey: nodeID)
                     poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
                     captureDepthBuffers.removeValue(forKey: nodeID); captureConnections.removeValue(forKey: nodeID)
+                    nodeStatusHealth.removeValue(forKey: nodeID)
+                    mediaControls.removeValue(forKey: nodeID); captureControlChannels.removeValue(forKey: nodeID)
                     let previous=captureQualityEvents[nodeID]
                     // No Node timestamp exists for a Host-observed disconnect.
                     captureQualityEvents[nodeID]=CaptureQualityEvent(sequence: previous?.sequence ?? 0,
@@ -555,7 +611,8 @@ final class StudioModel {
                         referenceSpaceRevision: previous?.referenceSpaceRevision ?? 0)
                     diagnosticEvents.observe(stream: .tracking, nodeID: nodeID, state: StreamQuality.lost.rawValue,
                         hostTime: DispatchTime.now().uptimeNanoseconds)
-                    captureNodeSources[nodeID]?.resetClockModel()
+                    realtimeCore.latestVideoFrame.endSession(sourceID: nodeID, sessionID: connectionID)
+                    realtimeCore.detach(nodeID)
                     deviceRegistry.updateState(for: nodeID, to: .disconnected)
                     if selectedTrackingNodeID == nodeID { trackingQuality = .lost }
                 }
@@ -589,6 +646,11 @@ final class StudioModel {
         clockStatistics.removeAll()
         clockLastAccepted.removeAll()
         captureDepthBuffers.removeAll(); captureQualityEvents.removeAll()
+        nodeStatusHealth.removeAll(); nodeMonitoring.removeAll()
+        mediaControls.removeAll(); captureControlChannels.removeAll()
+        for (id, connectionID) in captureConnections {
+            realtimeCore.latestVideoFrame.endSession(sourceID: id, sessionID: connectionID)
+        }
         captureConnections.removeAll()
         poseHealth.removeAll()
         poseMotionFilters.removeAll()
@@ -597,7 +659,7 @@ final class StudioModel {
         selectedTrackingNodeID = nil
         trackingQuality = .lost
         poseJitterBuffers.removeAll()
-        captureNodeSources.values.forEach { $0.stop() }
+        for id in captureNodeSources.keys { realtimeCore.detach(id) }
         captureNodeSources.removeAll()
     }
 
@@ -635,6 +697,8 @@ final class StudioModel {
     func refreshMetrics() {
         realtimeCore.metrics.sampleMemory()
         let now = DispatchTime.now().uptimeNanoseconds
+        for id in Array(mediaControls.keys) { mediaControls[id]?.expire(now: now) }
+        nodeMonitoring = monitoringSnapshots(now: now)
         if let id = selectedTrackingNodeID {
             poseRejectedCount = poseMotionFilters[id]?.rejectedCount ?? 0
             poseRejection = poseMotionFilters[id]?.lastRejection
@@ -679,6 +743,52 @@ final class StudioModel {
             diagnosticEvents.observe(stream: .tracking, nodeID: id, state: quality.rawValue, hostTime: now)
         }
         flushDiagnosticsArchive()
+    }
+
+    private func monitoringSnapshots(now: UInt64) -> [NodeMonitoringSnapshot] {
+        captureNodeSources.keys.sorted { $0.uuidString < $1.uuidString }.compactMap { id in
+            guard let source = captureNodeSources[id] else { return nil }
+            let clock = ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id], now: now)
+            let video = source.monitoringSnapshot()
+            let age = clock == .current ? video.captureAgeMilliseconds(now: Double(now) / 1_000_000_000) : nil
+            return NodeMonitoringSnapshot(id: id, name: source.descriptor.displayName,
+                connected: captureConnections[id] != nil, selected: selectedSourceID == id, clock: clock,
+                frameAgeMilliseconds: age, decodeMilliseconds: age.map { $0 <= 500 } == true ? video.decodeMilliseconds : nil,
+                poseQuality: (poseHealth[id] ?? PoseHealth()).effectiveQuality(now: now, clock: clock, timeoutSeconds: qualityProfile.poseTimeoutSeconds),
+                poseAgeMilliseconds: poseHealth[id]?.captureAgeMilliseconds(now: now),
+                roundTripMilliseconds: clockStatistics[id].map { $0.roundTripNanoseconds / 1_000_000 },
+                jitterMilliseconds: clockStatistics[id].map { $0.jitterNanoseconds / 1_000_000 },
+                trackingReason: captureQualityEvents[id]?.reason.rawValue,
+                status: nodeStatusHealth[id]?.current(now: now, clock: clock), mediaControl: mediaControls[id])
+        }
+    }
+
+    func takeSnapshotRequest() throws -> TakeSnapshotRequest {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let profile = calibrationProfile
+        try profile?.validate()
+        let calibration = try profile.map { try encoder.encode($0) }
+        var assets: [TakeManifest.Asset] = [.init(role: .diagnostics, relativePath: "diagnostics.json")]
+        if calibration != nil { assets.append(.init(role: .calibration, relativePath: "calibration.json")) }
+        let devices = deviceRegistry.devices.map { device in
+            let connection: String = switch device.state {
+            case .connected: "connected"
+            case .connecting: "connecting"
+            case .disconnected: "disconnected"
+            case .failed: "failed"
+            }
+            return TakeProvenance.Device(id: device.id, name: device.descriptor.displayName,
+                capabilities: device.descriptor.capabilities.map(\.rawValue).sorted(),
+                role: device.role.rawValue, connection: connection)
+        }.sorted { $0.id.uuidString < $1.id.uuidString }
+        let provenance = TakeProvenance(kind: .configurationSnapshot, software: .current, devices: devices,
+            calibration: profile.map { .init(id: $0.id, revision: $0.revision, cameraID: $0.cameraID, relativePath: "calibration.json") })
+        let manifest = TakeManifest(id: UUID(), name: "VPX Snapshot", createdAt: Date(), configuration: projectConfiguration,
+            assets: assets, provenance: provenance)
+        try manifest.validate()
+        return TakeSnapshotRequest(manifest: manifest, diagnostics: try encoder.encode(diagnosticsReport()), calibration: calibration)
     }
 
     func diagnosticsReport() -> DiagnosticsReport {
@@ -728,41 +838,47 @@ final class StudioModel {
                 chromaEnabled: chromaKeyEnabled,greenThreshold: chromaGreenThreshold,greenSoftness: chromaGreenSoftness,
                 temporalMatteEnabled: temporalMatteEnabled,temporalMatteStrength: temporalMatteStrength,
                 depthPreviewFarMeters: depthPreviewFarMeters),
-            calibrationProfile: calibrationProfile, calibrationIssue: calibrationIssue
+            calibrationProfile: calibrationProfile, calibrationIssue: calibrationIssue,
+            nodeMonitoring: monitoringSnapshots(now: now),
+            admissionLimits: admissionLimits, admissionEvents: admissionEvents
         )
     }
 
     private func attachCaptureNode(hello: CaptureNodeHello, channel: CaptureSecureChannel) {
+        nodeStatusHealth.removeValue(forKey: hello.nodeID)
         let connectionID=channel.connectionID
+        mediaControls[hello.nodeID] = NodeMediaControl()
+        captureControlChannels[hello.nodeID] = channel
         captureConnections[hello.nodeID]=connectionID
         captureDepthBuffers.removeValue(forKey: hello.nodeID); captureQualityEvents.removeValue(forKey: hello.nodeID)
-        let source: CaptureNodeHEVCVideoSource
-        if let existing = captureNodeSources[hello.nodeID] {
-            source = existing
-            source.updateHello(hello)
-            deviceRegistry.register(source.descriptor, role: .primaryCamera)
-        } else {
-            source = CaptureNodeHEVCVideoSource(hello: hello)
-            source.onFrame = { [weak core = realtimeCore] frame in
-                core?.ingest(frame, from: hello.nodeID)
-            }
-            source.onFailure = { [weak self] error in
-                Task { @MainActor [weak self] in
-                    self?.deviceRegistry.updateState(for: hello.nodeID, to: .failed(error.localizedDescription))
-                }
-            }
-            do {
-                try realtimeCore.attach(source)
-                deviceRegistry.register(source.descriptor, role: .primaryCamera)
-                captureNodeSources[hello.nodeID] = source
-            } catch {
-                deviceRegistry.register(source.descriptor, role: .primaryCamera)
+        // A new connection owns a new decoder and jitter buffer. Invalidate
+        // the mailbox token before draining the previous decoder's callbacks.
+        realtimeCore.latestVideoFrame.beginSession(sourceID: hello.nodeID, sessionID: connectionID)
+        realtimeCore.detach(hello.nodeID)
+        let source = CaptureNodeHEVCVideoSource(hello: hello)
+        source.onFrame = { [weak core = realtimeCore] frame in
+            core?.ingest(frame, from: hello.nodeID, sessionID: connectionID)
+        }
+        source.onFailure = { [weak self] error in
+            Task { @MainActor [weak self] in
+                guard let self, captureConnections[hello.nodeID] == connectionID else { return }
                 deviceRegistry.updateState(for: hello.nodeID, to: .failed(error.localizedDescription))
-                return
             }
         }
+        do {
+            try realtimeCore.attach(source)
+            deviceRegistry.register(source.descriptor, role: .primaryCamera)
+            captureNodeSources[hello.nodeID] = source
+        } catch {
+            realtimeCore.latestVideoFrame.endSession(sourceID: hello.nodeID, sessionID: connectionID)
+            channel.cancel()
+            deviceRegistry.register(source.descriptor, role: .primaryCamera)
+            deviceRegistry.updateState(for: hello.nodeID, to: .failed(error.localizedDescription))
+            return
+        }
 
-        channel.onVideoFrame = { [weak source] frame in
+        channel.onVideoFrame = { [weak source, weak channel] frame in
+            guard hello.capabilities.contains(.video) else { channel?.cancel(); return }
             do {
                 try source?.receive(frame)
             } catch {
@@ -776,6 +892,7 @@ final class StudioModel {
         channel.onDepthPacket = { [weak self] packet in
             Task { @MainActor [weak self] in
                 guard let self, captureConnections[hello.nodeID] == connectionID,
+                      mediaControls[hello.nodeID]?.suspended != true,
                       let clock=clockStatistics[hello.nodeID],
                       ClockFreshness.evaluate(lastAccepted: clockLastAccepted[hello.nodeID], now: DispatchTime.now().uptimeNanoseconds) == .current else { return }
                 var buffer=captureDepthBuffers[hello.nodeID] ?? CaptureDepthBuffer()

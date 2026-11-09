@@ -14,6 +14,9 @@ final class CaptureNodeBonjourHost: @unchecked Sendable {
     var onFailure: ((Error) -> Void)?
     var onTelemetry: ((UUID, UUID, CaptureTelemetryPayload) -> Void)?
     var onDisconnected: ((UUID, UUID) -> Void)?
+    var onAdmissionRejected: ((CaptureNodeHello, NodeAdmissionPolicy.Rejection) -> Void)?
+    var onReady: ((NWEndpoint.Port) -> Void)?
+    var onMediaControlResult: ((UUID, UUID, CaptureMediaControlResult) -> Void)?
 
     private let credential: CapturePairingCredential
     private let queue: DispatchQueue
@@ -22,13 +25,17 @@ final class CaptureNodeBonjourHost: @unchecked Sendable {
     private var telemetryPort: UInt16?
     private var channels: [UUID: CaptureSecureChannel] = [:]
     private var nodes: [UUID: UUID] = [:]
+    private var admission: NodeAdmissionPolicy
+    private static let maximumPendingConnections = 16
 
     init(
         credential: CapturePairingCredential,
-        queue: DispatchQueue = DispatchQueue(label: "com.vpxstudio.capture-host")
+        queue: DispatchQueue = DispatchQueue(label: "com.vpxstudio.capture-host"),
+        limits: NodeAdmissionPolicy.Limits = .standard
     ) {
         self.credential = credential
         self.queue = queue
+        admission = NodeAdmissionPolicy(limits: limits)
     }
 
     func start(port: NWEndpoint.Port? = nil) throws {
@@ -56,6 +63,7 @@ final class CaptureNodeBonjourHost: @unchecked Sendable {
             self?.accept(connection)
         }
         listener.stateUpdateHandler = { [weak self] state in
+            if case .ready = state, let port = self?.listener?.port { self?.onReady?(port) }
             if case .failed(let error) = state {
                 self?.onFailure?(error)
             }
@@ -69,14 +77,27 @@ final class CaptureNodeBonjourHost: @unchecked Sendable {
             listener?.cancel(); listener=nil
             datagrams?.stop(); datagrams=nil; telemetryPort=nil
             channels.values.forEach { $0.cancel() }; channels.removeAll(); nodes.removeAll()
+            admission.reset()
         }
     }
 
     private func accept(_ connection: NWConnection) {
+        let pending = channels.count - nodes.count
+        guard pending < Self.maximumPendingConnections else { connection.cancel(); return }
         let channel = CaptureSecureChannel(connection: connection, credential: credential)
         channels[channel.connectionID]=channel
+        queue.asyncAfter(deadline: .now() + 10) { [weak self, weak channel] in
+            guard let self, let channel,
+                  !nodes.values.contains(channel.connectionID) else { return }
+            channel.cancel()
+        }
         channel.onControlPacket = { [weak self, weak channel] envelope in
             guard let self, let channel else { return }
+            if envelope.kind == .mediaControlResult,
+               let nodeID = nodes.first(where: { $0.value == channel.connectionID })?.key,
+               let result = try? envelope.decodePayload(CaptureMediaControlResult.self) {
+                onMediaControlResult?(nodeID, channel.connectionID, result); return
+            }
             if envelope.kind == .qualityEvent,
                let nodeID=nodes.first(where: { $0.value == channel.connectionID })?.key,
                let event=try? envelope.decodePayload(CaptureQualityEvent.self) {
@@ -85,6 +106,12 @@ final class CaptureNodeBonjourHost: @unchecked Sendable {
             guard envelope.kind == .hello,
                   let hello = try? envelope.decodePayload(CaptureNodeHello.self),
                   hello.protocolVersion == CaptureNodeHello.currentProtocolVersion else { channel.cancel(); return }
+            switch admission.admit(hello, connectionID: channel.connectionID) {
+            case .accepted: break
+            case .duplicate: return
+            case .rejected(let reason):
+                onAdmissionRejected?(hello, reason); channel.cancel(); return
+            }
             if let old=nodes[hello.nodeID], old != channel.connectionID { channels[old]?.cancel() }
             nodes[hello.nodeID]=channel.connectionID
             offer(hello.nodeID, channel: channel)
@@ -109,6 +136,7 @@ final class CaptureNodeBonjourHost: @unchecked Sendable {
         catch { onFailure?(error) }
     }
     private func remove(_ channel: CaptureSecureChannel) {
+        admission.remove(connectionID: channel.connectionID)
         channels.removeValue(forKey: channel.connectionID)
         guard let nodeID=nodes.first(where: { $0.value == channel.connectionID })?.key else { return }
         nodes.removeValue(forKey: nodeID); datagrams?.unbind(nodeID: nodeID); onDisconnected?(nodeID, channel.connectionID)

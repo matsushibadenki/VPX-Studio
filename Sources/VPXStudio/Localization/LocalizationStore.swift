@@ -3,6 +3,14 @@ import VPXCaptureProtocol
 import Observation
 
 enum LocalizationKey: String {
+    case saveTakeSnapshot, takeConfigurationSnapshot, takeDevices, takeProvenanceUnknown
+    case takeIntegrity, openTake, recheckTake, takeChecking, takeReadFailed, takeIntegrityFailed
+    case takeVerified, takeUnverified, takeMissing, takeModified, takeUnreadable
+    case takeAssetRole, takeAssetPath, takeAssetStatus, takeCamera, takeAudio
+    case pauseNodeMedia, resumeNodeMedia, nodeMediaPending, nodeMediaFailed, nodeMediaPaused
+    case admissionLimits, admissionNodeLimit, admissionVideoLimit, admissionIdentityChanged, admissionCapabilitiesChanged
+    case nodeMonitor, nodeFrameAge, nodeBattery, nodeThermal, nodeCapture, nodeSending, nodeIdle
+    case nodeThermalNominal, nodeThermalFair, nodeThermalSerious, nodeThermalCritical
     case calibrationLensMismatch
     case checkerboardIntrinsicsExpired
     case solveCheckerboard, checkerboardHelp, checkerboardSolving, checkerboardInvalid, checkerboardIntrinsicsMismatch, checkerboardDegenerate, checkerboardResidualRejected, checkerboardMaximumResidual, checkerboardMeasured

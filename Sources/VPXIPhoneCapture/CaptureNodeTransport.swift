@@ -8,14 +8,24 @@ final class CaptureNodeTransport: @unchecked Sendable {
     private let lock = NSLock()
     private var stream: CaptureSecureChannel?
     private var telemetry: CaptureDatagramChannel?
-    func setStream(_ stream: CaptureSecureChannel?) { lock.withLock { self.stream=stream } }
+    private let mediaGate = CaptureMediaTransmissionGate()
+    func setStream(_ stream: CaptureSecureChannel?) {
+        lock.withLock { self.stream=stream }
+        mediaGate.reset()
+    }
     func setTelemetry(_ telemetry: CaptureDatagramChannel?) {
         let old=lock.withLock { let old=self.telemetry; self.telemetry=telemetry; return old }
         old?.cancel()
     }
-    func sendVideo(_ frame: CaptureEncodedVideoFrame) throws { try lock.withLock { stream }?.sendVideo(frame) }
-    func sendDepth(_ packet: CaptureDepthPacket) throws { try lock.withLock { stream }?.sendDepth(packet) }
+    func sendVideo(_ frame: CaptureEncodedVideoFrame) throws { try mediaGate.submit { try lock.withLock { stream }?.sendVideo(frame) } }
+    func sendDepth(_ packet: CaptureDepthPacket) throws { try mediaGate.submit { try lock.withLock { stream }?.sendDepth(packet) } }
+    func applyMediaCommand(_ command: CaptureNodeControlCommand) throws -> Bool {
+        try mediaGate.apply(command) { result in
+            try lock.withLock { stream }?.sendControl(CaptureMessageEnvelope(kind: .mediaControlResult, payload: result))
+        }
+    }
     func sendPose(_ pose: CapturePosePacket) { lock.withLock { telemetry }?.send(.pose(pose)) }
+    func sendStatus(_ status: CaptureNodeStatus) { lock.withLock { telemetry }?.send(.nodeStatus(status)) }
     func sendQuality(_ event: CaptureQualityEvent) throws {
         try lock.withLock { stream }?.sendControl(CaptureMessageEnvelope(kind: .qualityEvent, payload: event))
         lock.withLock { telemetry }?.send(.diagnostic(event))

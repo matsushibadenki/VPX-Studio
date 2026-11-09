@@ -26,7 +26,7 @@ final class RealtimeCore {
         videoSources.removeAll { $0.descriptor.id == id }
     }
 
-    func ingest(_ frame: VideoFrame, from sourceID: UUID) {
-        latestVideoFrame.put(frame, sourceID: sourceID)
+    func ingest(_ frame: VideoFrame, from sourceID: UUID, sessionID: UUID? = nil) {
+        latestVideoFrame.put(frame, sourceID: sourceID, sessionID: sessionID)
     }
 }

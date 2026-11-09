@@ -2,17 +2,18 @@ import Foundation
 import CryptoKit
 
 /// Portable description of a take. Paths are relative to the take directory.
-struct TakeManifest: Codable, Equatable {
-    static let currentVersion = 1
+struct TakeManifest: Codable, Equatable, Sendable {
+    static let currentVersion = 2
     var schemaVersion = currentVersion
     var id: UUID
     var name: String
     var createdAt: Date
     var configuration: ProjectConfiguration
     var assets: [Asset]
+    var provenance: TakeProvenance?
 
-    struct Asset: Codable, Equatable {
-        enum Role: String, Codable {
+    struct Asset: Codable, Equatable, Sendable {
+        enum Role: String, Codable, Sendable {
             case camera, composite, audio, matte, depth, pose, calibration, scene, color, diagnostics
         }
         var role: Role
@@ -21,6 +22,7 @@ struct TakeManifest: Codable, Equatable {
     }
 
     enum ValidationError: Error, Equatable {
+        case invalidProvenance
         case unsupportedVersion(Int)
         case invalidName
         case unsafePath(String)
@@ -30,7 +32,7 @@ struct TakeManifest: Codable, Equatable {
     }
 
     func validate() throws {
-        guard schemaVersion == Self.currentVersion else {
+        guard (1...Self.currentVersion).contains(schemaVersion) else {
             throw ValidationError.unsupportedVersion(schemaVersion)
         }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -54,13 +56,17 @@ struct TakeManifest: Codable, Equatable {
                 throw ValidationError.duplicatePath(path)
             }
         }
+        if let provenance {
+            guard schemaVersion >= 2 else { throw ValidationError.invalidProvenance }
+            try provenance.validate(assets: assets)
+        }
     }
 
-    enum IntegrityStatus: Equatable {
+    enum IntegrityStatus: String, Codable, Equatable, Sendable {
         case verified, unverified, missing, modified, unreadable
     }
 
-    struct IntegrityResult: Equatable {
+    struct IntegrityResult: Equatable, Sendable {
         let relativePath: String
         let status: IntegrityStatus
     }
@@ -80,11 +86,14 @@ struct TakeManifest: Codable, Equatable {
     /// Missing legacy hashes remain explicitly unverified, never verified.
     func verifyAssets(in directory: URL) throws -> [IntegrityResult] {
         try validate()
-        return assets.map { asset in
+        return try assets.map { asset in
+            try Task.checkCancellation()
             let status: IntegrityStatus
             do {
                 let actual = try Self.digest(of: asset, in: directory)
                 status = asset.sha256.map { $0 == actual ? .verified : .modified } ?? .unverified
+            } catch is CancellationError {
+                throw CancellationError()
             } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
                 status = .missing
             } catch {
@@ -95,6 +104,7 @@ struct TakeManifest: Codable, Equatable {
     }
 
     private static func digest(of asset: Asset, in directory: URL) throws -> String {
+        try Task.checkCancellation()
         let root = directory.resolvingSymlinksInPath().standardizedFileURL
         let url = root.appendingPathComponent(asset.relativePath).resolvingSymlinksInPath().standardizedFileURL
         guard url.path.hasPrefix(root.path + "/") else {
@@ -106,6 +116,7 @@ struct TakeManifest: Codable, Equatable {
         defer { try? handle.close() }
         var hasher = SHA256()
         while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
+            try Task.checkCancellation()
             hasher.update(data: chunk)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
@@ -126,6 +137,10 @@ struct TakeManifest: Codable, Equatable {
         decoder.dateDecodingStrategy = .iso8601
         let manifest = try decoder.decode(Self.self, from: Data(contentsOf: takeDirectory.appendingPathComponent("manifest.json")))
         try manifest.validate()
-        return manifest
+        // v1 has no provenance. Migration never invents historical device or
+        // software metadata, and loading does not rewrite the file on disk.
+        var migrated = manifest
+        migrated.schemaVersion = Self.currentVersion
+        return migrated
     }
 }

@@ -65,6 +65,52 @@ public final class CaptureNodeSessionModel {
     private var channel: CaptureSecureChannel?
     private let transport = CaptureNodeTransport()
     private var captureGeneration = UUID()
+    private var statusTask: Task<Void, Never>?
+    private var previousBatteryMonitoring: Bool?
+
+    private func stopStatusMonitoring() {
+        statusTask?.cancel(); statusTask = nil
+        if let previousBatteryMonitoring { UIDevice.current.isBatteryMonitoringEnabled = previousBatteryMonitoring }
+        previousBatteryMonitoring = nil
+    }
+
+    private func startStatusMonitoring() {
+        stopStatusMonitoring()
+        previousBatteryMonitoring = UIDevice.current.isBatteryMonitoringEnabled
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        statusTask = Task { @MainActor [weak self] in
+            var sequence: UInt64 = 0
+            while !Task.isCancelled {
+                guard self != nil else { return }
+                self?.sendStatus(sequence: sequence)
+                sequence &+= 1
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+        }
+    }
+
+    private func sendStatus(sequence: UInt64) {
+        let battery: CaptureNodeStatus.BatteryState
+        switch UIDevice.current.batteryState {
+        case .unplugged: battery = .unplugged
+        case .charging: battery = .charging
+        case .full: battery = .full
+        default: battery = .unknown
+        }
+        let thermal: CaptureNodeStatus.ThermalState
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: thermal = .nominal
+        case .fair: thermal = .fair
+        case .serious: thermal = .serious
+        case .critical: thermal = .critical
+        @unknown default: thermal = .unknown
+        }
+        let level = Double(UIDevice.current.batteryLevel)
+        transport.sendStatus(CaptureNodeStatus(sequence: sequence,
+            captureTimeNanoseconds: DispatchTime.now().uptimeNanoseconds,
+            batteryFraction: (0...1).contains(level) ? level : nil,
+            batteryState: battery, thermalState: thermal, isCapturing: isCapturing))
+    }
 
     public init(nodeID: UUID = UUID(), displayName: String = UIDevice.current.name) {
         self.nodeID = nodeID
@@ -139,7 +185,7 @@ public final class CaptureNodeSessionModel {
             return
         }
 
-        stopCapture()
+        stopCapture(); stopStatusMonitoring()
         transport.setTelemetry(nil); telemetryReady=false
         channel?.cancel()
         let channel = CaptureSecureChannel(endpoint: host.endpoint, credential: credential)
@@ -164,6 +210,18 @@ public final class CaptureNodeSessionModel {
             try? channel?.sendClockReply(reply)
         }
         channel.onControlPacket = { [weak self, weak channel] envelope in
+            if envelope.kind == .control,
+               let command = try? envelope.decodePayload(CaptureNodeControlCommand.self),
+               command.action == .suspendMedia || command.action == .resumeMedia {
+                Task { @MainActor [weak self, weak channel] in
+                    guard let self, let channel, self.channel === channel else { return }
+                    do {
+                        if command.action == .resumeMedia { coordinator.requestVideoKeyFrame() }
+                        try transport.applyMediaCommand(command)
+                    } catch { fail(error) }
+                }
+                return
+            }
             if envelope.kind == .control,
                let command=try? envelope.decodePayload(CaptureNodeControlCommand.self), command.action == .requestKeyFrame {
                 Task { @MainActor [weak self, weak channel] in
@@ -223,7 +281,7 @@ public final class CaptureNodeSessionModel {
     }
 
     public func stop() {
-        stopCapture()
+        stopCapture(); stopStatusMonitoring()
         channel?.cancel()
         channel = nil
         transport.setStream(nil); transport.setTelemetry(nil); telemetryReady=false
@@ -246,13 +304,14 @@ public final class CaptureNodeSessionModel {
                 )
                 try channel.sendControl(CaptureMessageEnvelope(kind: .hello, payload: hello))
                 status = .connected
+                startStatusMonitoring()
             } catch {
                 fail(error)
             }
         case .failed(let message), .waiting(let message):
             fail(CaptureNodeSessionError.connection(message))
         case .cancelled:
-            stopCapture(); transport.setTelemetry(nil); telemetryReady=false
+            stopCapture(); stopStatusMonitoring(); transport.setTelemetry(nil); telemetryReady=false
             self.channel=nil; transport.setStream(nil); status = .idle
         case .setup, .preparing:
             status = .connecting
@@ -266,7 +325,7 @@ public final class CaptureNodeSessionModel {
     }
 
     private func fail(_ error: Error) {
-        stopCapture()
+        stopCapture(); stopStatusMonitoring()
         let old=channel; channel=nil; transport.setStream(nil); transport.setTelemetry(nil); telemetryReady=false; old?.cancel()
         errorMessage = error.localizedDescription
         status = .failed(error.localizedDescription)

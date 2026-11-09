@@ -1,13 +1,13 @@
 import simd
 
-enum LengthUnit: String, Codable {
+enum LengthUnit: String, Codable, Sendable {
     case meters
 }
 
 /// VPX Stage space is right-handed: +X right, +Y up, and camera-forward -Z.
 /// Every device adapter must supply a transform from its native reference
 /// space into this coordinate system before publishing a PoseSample.
-struct StageCoordinateSystem: Codable, Equatable {
+struct StageCoordinateSystem: Codable, Equatable, Sendable {
     let unit: LengthUnit
     let isRightHanded: Bool
     let xAxis: String
@@ -32,7 +32,7 @@ struct StageCoordinateSystem: Codable, Equatable {
     }
 }
 
-struct VideoProfile: Codable, Equatable {
+struct VideoProfile: Codable, Equatable, Sendable {
     let name: String
     let width: Int
     let height: Int
@@ -48,7 +48,7 @@ struct VideoProfile: Codable, Equatable {
     )
 }
 
-struct ProjectConfiguration: Codable, Equatable {
+struct ProjectConfiguration: Codable, Equatable, Sendable {
     let stageCoordinateSystem: StageCoordinateSystem
     let liveVideoProfile: VideoProfile
 

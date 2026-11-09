@@ -3,6 +3,7 @@ import Darwin
 
 /// All times are seconds in the Host monotonic clock domain. Nil means unknown.
 struct FrameTelemetry: Sendable {
+    var sourceGeneration: UUID?
     var captured: Double?
     var received: Double?
     var encodeCompleted: Double?

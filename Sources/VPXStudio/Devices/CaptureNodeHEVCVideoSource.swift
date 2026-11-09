@@ -13,6 +13,9 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     var onKeyFrameNeeded: (() -> Void)?
 
     private let decoder = MacHEVCVideoDecoder()
+    // Decode submission and teardown cannot run concurrently. Decoder callbacks
+    // only take bufferLock, never decoderLock.
+    private let decoderLock = NSLock()
     private let bufferLock = NSLock()
     private var jitterBuffer = CaptureVideoJitterBuffer()
     private var nodeClockOffsetNanoseconds = 0.0
@@ -21,6 +24,20 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     private var clockLastAcceptedNanoseconds: UInt64?
     private var receivedTimes: [UInt64: Double] = [:]
     private var awaitingKeyFrame = true
+    private var monitoring = NodeVideoMonitoring()
+    private var stopped = false
+    private var mediaSuspended = false
+    private var mediaGeneration = UUID()
+
+    func setMediaSuspended(_ suspended: Bool) {
+        bufferLock.withLock {
+            mediaSuspended = suspended; mediaGeneration = UUID()
+            jitterBuffer = CaptureVideoJitterBuffer(); receivedTimes.removeAll()
+            awaitingKeyFrame = true; monitoring = NodeVideoMonitoring()
+        }
+    }
+
+    func monitoringSnapshot() -> NodeVideoMonitoring { bufferLock.withLock { monitoring } }
 
     init(hello: CaptureNodeHello) {
         descriptor = DeviceDescriptor(
@@ -44,14 +61,18 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
     }
 
     func stop() {
+        bufferLock.withLock { stopped = true }
         resetClockModel()
-        decoder.completeFrames()
-        decoder.invalidate()
+        decoderLock.withLock {
+            decoder.completeFrames()
+            decoder.invalidate()
+        }
     }
 
     func receive(_ encodedFrame: CaptureEncodedVideoFrame) throws {
         var requestKeyFrame=false
         let readyFrames = bufferLock.withLock { () -> [(CaptureEncodedVideoFrame, FrameTelemetry)] in
+            guard !stopped, !mediaSuspended else { return [] }
             let received = CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()))
             receivedTimes[encodedFrame.header.sequence] = received
             if receivedTimes.count > 64, let oldest = receivedTimes.keys.min() { receivedTimes.removeValue(forKey: oldest) }
@@ -84,7 +105,7 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
                 let capture = HostClockMapping.hostTime(nodeNanoseconds: frame.header.captureTimeNanoseconds,
                     offset: nodeClockOffsetNanoseconds, driftPPM: clockDriftPartsPerMillion,
                     referenceHost: clockReferenceHostNanoseconds)
-                return (frame, FrameTelemetry(captured: capture.map { $0 / 1_000_000_000 },
+                return (frame, FrameTelemetry(sourceGeneration: mediaGeneration, captured: capture.map { $0 / 1_000_000_000 },
                     received: receivedTimes.removeValue(forKey: frame.header.sequence),
                     encodeCompleted: frame.header.encodeCompletedNanoseconds.flatMap {
                         HostClockMapping.hostTime(nodeNanoseconds: $0, offset: nodeClockOffsetNanoseconds,
@@ -94,7 +115,10 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
         }
         if requestKeyFrame { onKeyFrameNeeded?() }
         for (frame, telemetry) in readyFrames {
-            try decoder.decode(frame, telemetry: telemetry)
+            try decoderLock.withLock {
+                guard bufferLock.withLock({ !stopped }) else { return }
+                try decoder.decode(frame, telemetry: telemetry)
+            }
         }
     }
 
@@ -102,7 +126,15 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
                           acceptedAtNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds) {
         guard CaptureSynchronizationPolicy().accepts(statistics) else { resetClockModel(); return }
         let needsKeyFrame = bufferLock.withLock {
-            let needsKeyFrame = clockLastAcceptedNanoseconds == nil
+            guard !stopped else { return false }
+            let needsKeyFrame = ClockFreshness.evaluate(lastAccepted: clockLastAcceptedNanoseconds,
+                now: acceptedAtNanoseconds) != .current
+            if needsKeyFrame {
+                jitterBuffer = CaptureVideoJitterBuffer()
+                receivedTimes.removeAll()
+                awaitingKeyFrame = true
+                monitoring = NodeVideoMonitoring()
+            }
             clockLastAcceptedNanoseconds = acceptedAtNanoseconds
             nodeClockOffsetNanoseconds = statistics.nodeClockOffsetNanoseconds
             clockDriftPartsPerMillion = statistics.driftPartsPerMillion
@@ -114,7 +146,7 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
 
     func hasCurrentClock(at now: UInt64) -> Bool {
         bufferLock.withLock {
-            ClockFreshness.evaluate(lastAccepted: clockLastAcceptedNanoseconds, now: now) == .current
+            !stopped && ClockFreshness.evaluate(lastAccepted: clockLastAcceptedNanoseconds, now: now) == .current
         }
     }
 
@@ -124,6 +156,7 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
             jitterBuffer = CaptureVideoJitterBuffer()
             receivedTimes.removeAll()
             awaitingKeyFrame=true
+            monitoring = NodeVideoMonitoring()
         }
     }
 
@@ -136,6 +169,11 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
             timescale: 1_000_000_000
         )
         let hostReceiveTime = CMClockGetTime(CMClockGetHostTimeClock())
+        bufferLock.lock()
+        defer { bufferLock.unlock() }
+        guard !stopped, !mediaSuspended, telemetry.sourceGeneration == mediaGeneration else { return }
+        monitoring = NodeVideoMonitoring(captured: captured, decoded: telemetry.decodeCompleted,
+            decodeMilliseconds: FrameTelemetry.milliseconds(from: telemetry.decodeStarted, to: telemetry.decodeCompleted))
         onFrame?(
             VideoFrame(
                 identifier: header.sequence,

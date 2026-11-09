@@ -54,6 +54,7 @@ public struct CaptureTelemetryOffer: Codable, Sendable {
 }
 
 public enum CaptureTelemetryPayload: Codable, Sendable, Equatable {
+    case nodeStatus(CaptureNodeStatus)
     case pose(CapturePosePacket)
     case diagnostic(CaptureQualityEvent)
 }

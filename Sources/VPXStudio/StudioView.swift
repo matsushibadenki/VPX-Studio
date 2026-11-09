@@ -9,6 +9,8 @@ struct StudioView: View {
     @State private var showsCaptureNodePairing = false
     @State private var diagnosticsExportError: String?
     @State private var showsDiagnostics = false
+    @State private var showsNodeMonitor = false
+    @State private var showsTakeReview = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +35,10 @@ struct StudioView: View {
         .sheet(isPresented: $showsDiagnostics) {
             DiagnosticsHistoryView(studio: studio, localization: localization)
         }
+        .sheet(isPresented: $showsNodeMonitor) {
+            NodeMonitorView(studio: studio, localization: localization)
+        }
+        .sheet(isPresented: $showsTakeReview) { TakeReviewView(studio: studio, localization: localization) }
         .alert(localization.text(.diagnosticsExportFailed), isPresented: Binding(
             get: { diagnosticsExportError != nil },
             set: { if !$0 { diagnosticsExportError = nil } }
@@ -67,6 +73,11 @@ struct StudioView: View {
             .pickerStyle(.segmented)
             .help(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady))
             Spacer(minLength: 16)
+            Button { showsTakeReview = true } label: { Image(systemName: "checkmark.shield") }
+                .help(localization.text(.takeIntegrity)).accessibilityLabel(localization.text(.takeIntegrity))
+            Button { showsNodeMonitor = true } label: { Image(systemName: "network") }
+                .help(localization.text(.nodeMonitor))
+                .accessibilityLabel(localization.text(.nodeMonitor))
             Button { showsDiagnostics = true } label: {
                 Image(systemName: "waveform.path.ecg")
             }

@@ -8,6 +8,35 @@ final class LatestVideoFrameStore {
     private let lock = NSLock()
     private var latest: VideoFrame?
     private var selectedSourceID: UUID?
+    private var sessions: [UUID: UUID] = [:]
+    private var suspendedSources: Set<UUID> = []
+
+    func setSuspended(_ suspended: Bool, sourceID: UUID, sessionID: UUID) {
+        lock.withLock {
+            guard sessions[sourceID] == sessionID else { return }
+            if suspended { suspendedSources.insert(sourceID) } else { suspendedSources.remove(sourceID) }
+            if selectedSourceID == sourceID { latest = nil }
+        }
+    }
+
+    /// Invalidates in-flight callbacks from a previous connection atomically
+    /// with clearing the selected frame. Local sources use no session token.
+    func beginSession(sourceID: UUID, sessionID: UUID) {
+        lock.withLock {
+            sessions[sourceID] = sessionID
+            suspendedSources.remove(sourceID)
+            if selectedSourceID == sourceID { latest = nil }
+        }
+    }
+
+    func endSession(sourceID: UUID, sessionID: UUID) {
+        lock.withLock {
+            guard sessions[sourceID] == sessionID else { return }
+            sessions.removeValue(forKey: sourceID)
+            suspendedSources.remove(sourceID)
+            if selectedSourceID == sourceID { latest = nil }
+        }
+    }
 
     func selectSource(_ id: UUID?) {
         lock.lock()
@@ -17,10 +46,12 @@ final class LatestVideoFrameStore {
         latest = nil
     }
 
-    func put(_ frame: VideoFrame, sourceID: UUID) {
+    func put(_ frame: VideoFrame, sourceID: UUID, sessionID: UUID? = nil) {
         lock.lock()
         defer { lock.unlock() }
         guard sourceID == selectedSourceID else { return }
+        guard sessions[sourceID] == sessionID else { return }
+        guard !suspendedSources.contains(sourceID) else { return }
         latest = frame
     }
 

@@ -3,7 +3,7 @@ import Metal
 
 /// Point-in-time measurements; not an end-to-end latency benchmark.
 struct DiagnosticsReport: Codable {
-    static let currentSchemaVersion = 13
+    static let currentSchemaVersion = 16
     let schemaVersion: Int
     let capturedAt: Date
     let configuration: ProjectConfiguration
@@ -21,6 +21,9 @@ struct DiagnosticsReport: Codable {
     var renderConfiguration: RenderConfiguration?
     var calibrationProfile: CalibrationProfile?
     var calibrationIssue: CalibrationProfile.Issue?
+    var nodeMonitoring: [NodeMonitoringSnapshot]?
+    var admissionLimits: NodeAdmissionPolicy.Limits?
+    var admissionEvents: [NodeAdmissionEvent]?
 
     struct NodeClock: Codable {
         let nodeID: UUID
