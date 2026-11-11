@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import AVKit
 
 private struct TakeReviewRow: Identifiable {
     let asset: TakeManifest.Asset
@@ -11,6 +12,8 @@ struct TakeReviewView: View {
     @Bindable var studio: StudioModel
     @Bindable var localization: LocalizationStore
     @State private var review = TakeReviewModel()
+    @State private var playback = TakePlaybackModel()
+    @State private var selectedPlaybackPath: String?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -18,18 +21,24 @@ struct TakeReviewView: View {
             HStack {
                 Label(localization.text(.takeIntegrity), systemImage: "checkmark.shield").font(.headline)
                 Spacer()
+                Button {
+                    guard let directory = review.directory, let snapshot = review.snapshot, let path = selectedPlaybackPath else { return }
+                    playback.play(directory: directory, snapshot: snapshot, relativePath: path)
+                } label: { Image(systemName: "play.fill") }
+                .disabled(!canPlaySelection || review.isLoading || playback.isPreparing)
+                .help(localization.text(.playTakeAsset)).accessibilityLabel(localization.text(.playTakeAsset))
                 Button { saveSnapshot() } label: { Image(systemName: "square.and.arrow.down") }
                     .disabled(review.isLoading)
                     .help(localization.text(.saveTakeSnapshot)).accessibilityLabel(localization.text(.saveTakeSnapshot))
                 Button { chooseDirectory() } label: { Image(systemName: "folder") }
                     .help(localization.text(.openTake)).accessibilityLabel(localization.text(.openTake))
-                Button { if let directory = review.directory { review.open(directory) } } label: {
+                Button { playback.stop(); if let directory = review.directory { review.open(directory) } } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .disabled(review.directory == nil || review.isLoading)
                 .help(localization.text(.recheckTake)).accessibilityLabel(localization.text(.recheckTake))
-                if review.isLoading {
-                    Button { review.cancel() } label: { Image(systemName: "stop.fill") }
+                if review.isLoading || playback.isPreparing || playback.player != nil {
+                    Button { playback.stop(); review.cancel() } label: { Image(systemName: "stop.fill") }
                         .help(localization.text(.stop)).accessibilityLabel(localization.text(.stop))
                 }
                 Button(localization.text(.close)) { dismiss() }.keyboardShortcut(.cancelAction)
@@ -68,7 +77,7 @@ struct TakeReviewView: View {
                 } else {
                     Text(localization.text(.takeProvenanceUnknown)).font(.caption).foregroundStyle(.secondary)
                 }
-                Table(zip(snapshot.manifest.assets, snapshot.results).map { TakeReviewRow(asset: $0.0, status: $0.1.status) }) {
+                Table(zip(snapshot.manifest.assets, snapshot.results).map { TakeReviewRow(asset: $0.0, status: $0.1.status) }, selection: $selectedPlaybackPath) {
                     TableColumn(localization.text(.takeAssetRole)) { entry in
                         Text(localization.text(roleKey(entry.asset.role)))
                     }.width(90)
@@ -81,14 +90,31 @@ struct TakeReviewView: View {
                             .foregroundStyle(status == .verified ? Color.green : .orange)
                     }.width(130)
                 }
+                if playback.isPreparing {
+                    HStack { ProgressView().controlSize(.small); Text(localization.text(.takePreparingPlayback)) }
+                }
+                if let error = playback.error {
+                    Label(localization.text(.takePlaybackFailed), systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange).help(error)
+                }
+                if let player = playback.player {
+                    VideoPlayer(player: player).frame(height: 240)
+                }
             } else {
                 ContentUnavailableView(localization.text(.openTake), systemImage: "folder")
             }
             Spacer(minLength: 0)
         }
         .padding(16)
-        .frame(width: 820, height: 520)
-        .onDisappear { review.cancel() }
+        .frame(width: 820, height: playback.player == nil ? 520 : 720)
+        .onDisappear { playback.stop(); review.cancel() }
+        .onChange(of: review.snapshot?.manifest.id) { _, _ in playback.stop(); selectedPlaybackPath = nil }
+    }
+
+    private var canPlaySelection: Bool {
+        guard let snapshot = review.snapshot, let path = selectedPlaybackPath else { return false }
+        return snapshot.manifest.assets.contains { $0.relativePath == path && ($0.role == .camera || $0.role == .composite) }
+            && snapshot.results.contains { $0.relativePath == path && $0.status == .verified }
     }
 
     private func chooseDirectory() {
@@ -97,6 +123,7 @@ struct TakeReviewView: View {
         panel.prompt = localization.text(.openTake)
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
+            playback.stop()
             review.open(url)
         }
     }
@@ -109,7 +136,7 @@ struct TakeReviewView: View {
             do {
                 let request = try studio.takeSnapshotRequest()
                 let destination = parent.appendingPathComponent("VPX-Snapshot-\(request.manifest.id.uuidString)", isDirectory: true)
-                review.saveSnapshot(request, to: destination)
+                playback.stop(); review.saveSnapshot(request, to: destination)
             } catch { review.showError(error) }
         }
     }

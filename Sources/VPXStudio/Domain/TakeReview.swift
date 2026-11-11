@@ -11,6 +11,15 @@ struct TakeReviewSnapshot: Sendable {
 
 /// File hashing runs on this actor, away from the UI and render threads.
 actor TakeReviewService {
+    enum PlaybackError: Error { case reviewChanged }
+
+    func preparePlayback(directory: URL, manifest: TakeManifest, relativePath: String) throws -> URL {
+        try Task.checkCancellation()
+        let scoped = directory.startAccessingSecurityScopedResource()
+        defer { if scoped { directory.stopAccessingSecurityScopedResource() } }
+        guard try TakeManifest.load(from: directory) == manifest else { throw PlaybackError.reviewChanged }
+        return try manifest.verifiedPlaybackURL(relativePath: relativePath, in: directory)
+    }
     func inspect(directory: URL) throws -> TakeReviewSnapshot {
         try Task.checkCancellation()
         let scoped = directory.startAccessingSecurityScopedResource()

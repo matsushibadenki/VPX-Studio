@@ -31,7 +31,8 @@ let package = Package(
         ),
         .testTarget(
             name: "VPXStudioTests",
-            dependencies: ["VPXStudio", "VPXCaptureProtocol"]
+            dependencies: ["VPXStudio", "VPXCaptureProtocol"],
+            resources: [.copy("Fixtures")]
         )
     ]
 )

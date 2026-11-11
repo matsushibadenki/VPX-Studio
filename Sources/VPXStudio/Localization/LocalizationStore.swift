@@ -3,6 +3,7 @@ import VPXCaptureProtocol
 import Observation
 
 enum LocalizationKey: String {
+    case playTakeAsset, takePreparingPlayback, takePlaybackFailed
     case saveTakeSnapshot, takeConfigurationSnapshot, takeDevices, takeProvenanceUnknown
     case takeIntegrity, openTake, recheckTake, takeChecking, takeReadFailed, takeIntegrityFailed
     case takeVerified, takeUnverified, takeMissing, takeModified, takeUnreadable

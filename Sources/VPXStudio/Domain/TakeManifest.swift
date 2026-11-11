@@ -71,6 +71,19 @@ struct TakeManifest: Codable, Equatable, Sendable {
         let status: IntegrityStatus
     }
 
+    enum PlaybackError: Error { case unsupportedRole, unverified, modified }
+
+    /// Rehashes the selected sealed asset immediately before handing it to AVKit.
+    func verifiedPlaybackURL(relativePath: String, in directory: URL) throws -> URL {
+        try validate()
+        guard let asset = assets.first(where: { $0.relativePath == relativePath }),
+              asset.role == .camera || asset.role == .composite else { throw PlaybackError.unsupportedRole }
+        guard let expected = asset.sha256 else { throw PlaybackError.unverified }
+        let inspected = try Self.inspectAsset(asset, in: directory)
+        guard inspected.digest == expected else { throw PlaybackError.modified }
+        return inspected.url
+    }
+
     /// Call off the realtime/UI thread after recording has closed its files.
     /// The manifest is updated only if every asset can be hashed successfully.
     mutating func sealAssets(in directory: URL) throws {
@@ -104,6 +117,10 @@ struct TakeManifest: Codable, Equatable, Sendable {
     }
 
     private static func digest(of asset: Asset, in directory: URL) throws -> String {
+        try inspectAsset(asset, in: directory).digest
+    }
+
+    private static func inspectAsset(_ asset: Asset, in directory: URL) throws -> (digest: String, url: URL) {
         try Task.checkCancellation()
         let root = directory.resolvingSymlinksInPath().standardizedFileURL
         let url = root.appendingPathComponent(asset.relativePath).resolvingSymlinksInPath().standardizedFileURL
@@ -119,7 +136,7 @@ struct TakeManifest: Codable, Equatable, Sendable {
             try Task.checkCancellation()
             hasher.update(data: chunk)
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return (hasher.finalize().map { String(format: "%02x", $0) }.joined(), url)
     }
 
     func save(to takeDirectory: URL) throws {
