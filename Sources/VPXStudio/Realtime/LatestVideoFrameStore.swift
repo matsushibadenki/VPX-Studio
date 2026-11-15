@@ -9,6 +9,26 @@ final class LatestVideoFrameStore {
     private var latest: VideoFrame?
     private var selectedSourceID: UUID?
     private var sessions: [UUID: UUID] = [:]
+    private var recording: (sourceID: UUID, sessionID: UUID?, recorder: CameraTakeRecorder)?
+
+    func startRecording(_ recorder: CameraTakeRecorder, sourceID: UUID) -> Bool {
+        lock.withLock {
+            guard recording == nil, selectedSourceID == sourceID else { return false }
+            recording = (sourceID, sessions[sourceID], recorder)
+            return true
+        }
+    }
+
+    var recordingFailed: Bool { lock.withLock { recording?.recorder.hasFailed == true } }
+
+    func stopRecording() -> CameraTakeRecorder? {
+        lock.withLock {
+            let recorder = recording?.recorder
+            recording = nil
+            return recorder
+        }
+    }
+
     private var suspendedSources: Set<UUID> = []
 
     func setSuspended(_ suspended: Bool, sourceID: UUID, sessionID: UUID) {
@@ -53,6 +73,9 @@ final class LatestVideoFrameStore {
         guard sessions[sourceID] == sessionID else { return }
         guard !suspendedSources.contains(sourceID) else { return }
         latest = frame
+        if let recording, recording.sourceID == sourceID, recording.sessionID == sessionID {
+            recording.recorder.submit(frame)
+        }
     }
 
     func read() -> VideoFrame? {

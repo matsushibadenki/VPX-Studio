@@ -92,6 +92,33 @@ final class StudioModel {
     var networkJitterMilliseconds = 0.0
     var clockDriftPartsPerMillion = 0.0
     var inputColorMetadata = ""
+    private(set) var isFinalizingRecording = false
+    var recordingError: String?
+    private(set) var savedRecording: URL?
+
+    func startCameraRecording(in directory: URL) {
+        guard !isRecording, !isFinalizingRecording, !isBenchmarkRunning, let id = selectedSourceID,
+              benchmarkSource?.descriptor.id != id, calibrationIssue == nil,
+              deviceRegistry.devices.contains(where: { $0.id == id && $0.state == .connected }) else { return }
+        recordingError = nil; savedRecording = nil
+        do {
+            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory, sourceID: id)
+            guard realtimeCore.latestVideoFrame.startRecording(recorder, sourceID: id) else { return }
+            isRecording = true
+            if !isRecording { _ = realtimeCore.latestVideoFrame.stopRecording() }
+        } catch { recordingError = String(describing: error) }
+    }
+
+    func finishCameraRecording() {
+        guard let recorder = realtimeCore.latestVideoFrame.stopRecording() else { return }
+        isRecording = false; isFinalizingRecording = true
+        Task {
+            defer { isFinalizingRecording = false }
+            do { savedRecording = try await recorder.finish() }
+            catch { recordingError = String(describing: error) }
+        }
+    }
+
     var isRecording = false {
         didSet {
             if isRecording && calibrationIssue != nil { isRecording = false }
@@ -387,7 +414,7 @@ final class StudioModel {
     private(set) var isBenchmarkRunning = false
 
     func startBenchmark() {
-        guard !isBenchmarkRunning, mode != .live, mode != .record else { return }
+        guard !isRecording, !isBenchmarkRunning, mode != .live, mode != .record else { return }
         do {
             if let previous = benchmarkSource {
                 realtimeCore.detach(previous.descriptor.id)
@@ -509,6 +536,7 @@ final class StudioModel {
     }
 
     func stopPreview() {
+        finishCameraRecording()
         cancelCheckerboardSolve()
         if isBenchmarkRunning {
             isBenchmarkRunning = false
@@ -611,6 +639,7 @@ final class StudioModel {
                         referenceSpaceRevision: previous?.referenceSpaceRevision ?? 0)
                     diagnosticEvents.observe(stream: .tracking, nodeID: nodeID, state: StreamQuality.lost.rawValue,
                         hostTime: DispatchTime.now().uptimeNanoseconds)
+                    if selectedSourceID == nodeID { finishCameraRecording() }
                     realtimeCore.latestVideoFrame.endSession(sourceID: nodeID, sessionID: connectionID)
                     realtimeCore.detach(nodeID)
                     deviceRegistry.updateState(for: nodeID, to: .disconnected)
@@ -626,6 +655,7 @@ final class StudioModel {
     }
 
     func stopCaptureNodeHost() {
+        if let selectedSourceID, captureNodeSources[selectedSourceID] != nil { finishCameraRecording() }
         if let selectedSourceID, captureNodeSources[selectedSourceID] != nil {
             realtimeCore.latestVideoFrame.selectSource(nil)
             self.selectedSourceID = nil
@@ -695,6 +725,7 @@ final class StudioModel {
     }
 
     func refreshMetrics() {
+        if realtimeCore.latestVideoFrame.recordingFailed { finishCameraRecording() }
         realtimeCore.metrics.sampleMemory()
         let now = DispatchTime.now().uptimeNanoseconds
         for id in Array(mediaControls.keys) { mediaControls[id]?.expire(now: now) }
@@ -845,6 +876,7 @@ final class StudioModel {
     }
 
     private func attachCaptureNode(hello: CaptureNodeHello, channel: CaptureSecureChannel) {
+        if selectedSourceID == hello.nodeID, captureConnections[hello.nodeID] != nil { finishCameraRecording() }
         nodeStatusHealth.removeValue(forKey: hello.nodeID)
         let connectionID=channel.connectionID
         mediaControls[hello.nodeID] = NodeMediaControl()

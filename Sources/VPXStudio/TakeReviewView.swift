@@ -11,6 +11,7 @@ private struct TakeReviewRow: Identifiable {
 struct TakeReviewView: View {
     @Bindable var studio: StudioModel
     @Bindable var localization: LocalizationStore
+    var initialDirectory: URL? = nil
     @State private var review = TakeReviewModel()
     @State private var playback = TakePlaybackModel()
     @State private var selectedPlaybackPath: String?
@@ -107,6 +108,7 @@ struct TakeReviewView: View {
         }
         .padding(16)
         .frame(width: 820, height: playback.player == nil ? 520 : 720)
+        .onAppear { if let initialDirectory, review.directory == nil { review.open(initialDirectory) } }
         .onDisappear { playback.stop(); review.cancel() }
         .onChange(of: review.snapshot?.manifest.id) { _, _ in playback.stop(); selectedPlaybackPath = nil }
     }

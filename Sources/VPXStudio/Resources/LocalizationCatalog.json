@@ -4,6 +4,7 @@
       "id": "ja",
       "name": "日本語",
       "translations": {
+        "recordCamera": "入力映像を収録", "finalizingTake": "Takeを保存中", "recordingFailed": "映像収録に失敗しました", "takeSaved": "Take保存済み",
         "playTakeAsset": "選択した照合済み映像を再生", "takePreparingPlayback": "再照合・再生準備中", "takePlaybackFailed": "再生できません・再照合や映像形式を確認してください",
         "saveTakeSnapshot": "設定・診断を保存（映像なし）", "takeConfigurationSnapshot": "設定スナップショット（映像なし）", "takeDevices": "機器", "takeProvenanceUnknown": "作成ソフトウェア・機器情報なし",
         "takeIntegrity": "Take整合性チェック", "openTake": "Takeフォルダを開く", "recheckTake": "再照合", "takeChecking": "照合中", "takeReadFailed": "Takeの保存・照合に失敗しました", "takeIntegrityFailed": "整合性の問題あり", "takeVerified": "照合済み", "takeUnverified": "未検証", "takeMissing": "欠落", "takeModified": "変更あり", "takeUnreadable": "読込不能", "takeAssetRole": "種類", "takeAssetPath": "相対パス", "takeAssetStatus": "照合結果", "takeCamera": "カメラ", "takeAudio": "音声",
@@ -46,6 +47,7 @@
       "id": "en",
       "name": "English",
       "translations": {
+        "recordCamera": "Record input", "finalizingTake": "Saving take", "recordingFailed": "Video recording failed", "takeSaved": "Take saved",
         "playTakeAsset": "Play selected verified video", "takePreparingPlayback": "Reverifying and preparing playback", "takePlaybackFailed": "Cannot play; recheck integrity and media format",
         "saveTakeSnapshot": "Save configuration/diagnostics (no video)", "takeConfigurationSnapshot": "Configuration snapshot (no video)", "takeDevices": "Devices", "takeProvenanceUnknown": "Software/device provenance unavailable",
         "takeIntegrity": "Take integrity review", "openTake": "Open take folder", "recheckTake": "Verify again", "takeChecking": "Verifying", "takeReadFailed": "Cannot save or verify take", "takeIntegrityFailed": "Integrity issues found", "takeVerified": "Verified", "takeUnverified": "Unverified", "takeMissing": "Missing", "takeModified": "Modified", "takeUnreadable": "Unreadable", "takeAssetRole": "Role", "takeAssetPath": "Relative path", "takeAssetStatus": "Integrity", "takeCamera": "Camera", "takeAudio": "Audio",
@@ -88,6 +90,7 @@
       "id": "zh-Hans",
       "name": "简体中文",
       "translations": {
+        "recordCamera": "录制输入视频", "finalizingTake": "正在保存Take", "recordingFailed": "视频录制失败", "takeSaved": "Take已保存",
         "playTakeAsset": "播放所选已验证视频", "takePreparingPlayback": "正在重新验证并准备播放", "takePlaybackFailed": "无法播放；请检查完整性和视频格式",
         "saveTakeSnapshot": "保存设置与诊断（不含视频）", "takeConfigurationSnapshot": "设置快照（不含视频）", "takeDevices": "设备", "takeProvenanceUnknown": "无创建软件或设备信息",
         "takeIntegrity": "Take完整性检查", "openTake": "打开Take文件夹", "recheckTake": "重新检查", "takeChecking": "正在检查", "takeReadFailed": "无法保存或检查Take", "takeIntegrityFailed": "发现完整性问题", "takeVerified": "已验证", "takeUnverified": "未验证", "takeMissing": "缺失", "takeModified": "已修改", "takeUnreadable": "无法读取", "takeAssetRole": "类型", "takeAssetPath": "相对路径", "takeAssetStatus": "检查结果", "takeCamera": "相机", "takeAudio": "音频",

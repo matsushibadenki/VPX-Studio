@@ -11,6 +11,7 @@ struct StudioView: View {
     @State private var showsDiagnostics = false
     @State private var showsNodeMonitor = false
     @State private var showsTakeReview = false
+    @State private var initialTakeDirectory: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +31,11 @@ struct StudioView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .alert(localization.text(.recordingFailed), isPresented: Binding(
+            get: { studio.recordingError != nil }, set: { if !$0 { studio.recordingError = nil } }
+        )) {
+            Button(localization.text(.close)) { studio.recordingError = nil }
+        } message: { Text(studio.recordingError ?? "") }
         .onAppear { studio.startPreview() }
         .onDisappear { studio.stopPreview() }
         .sheet(isPresented: $showsDiagnostics) {
@@ -38,7 +44,7 @@ struct StudioView: View {
         .sheet(isPresented: $showsNodeMonitor) {
             NodeMonitorView(studio: studio, localization: localization)
         }
-        .sheet(isPresented: $showsTakeReview) { TakeReviewView(studio: studio, localization: localization) }
+        .sheet(isPresented: $showsTakeReview) { TakeReviewView(studio: studio, localization: localization, initialDirectory: initialTakeDirectory) }
         .alert(localization.text(.diagnosticsExportFailed), isPresented: Binding(
             get: { diagnosticsExportError != nil },
             set: { if !$0 { diagnosticsExportError = nil } }
@@ -73,7 +79,7 @@ struct StudioView: View {
             .pickerStyle(.segmented)
             .help(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady))
             Spacer(minLength: 16)
-            Button { showsTakeReview = true } label: { Image(systemName: "checkmark.shield") }
+            Button { initialTakeDirectory = nil; showsTakeReview = true } label: { Image(systemName: "checkmark.shield") }
                 .help(localization.text(.takeIntegrity)).accessibilityLabel(localization.text(.takeIntegrity))
             Button { showsNodeMonitor = true } label: { Image(systemName: "network") }
                 .help(localization.text(.nodeMonitor))
@@ -108,11 +114,20 @@ struct StudioView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            Button(studio.isRecording ? localization.text(.stop) : localization.text(.record)) {
-                studio.isRecording.toggle()
+            Button(studio.isRecording ? localization.text(.stop) : localization.text(studio.isFinalizingRecording ? .finalizingTake : .recordCamera)) {
+                if studio.isRecording { studio.finishCameraRecording() }
+                else {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.prompt = localization.text(.recordCamera)
+                    panel.begin { response in
+                        if response == .OK, let directory = panel.url { studio.startCameraRecording(in: directory) }
+                    }
+                }
             }
             .tint(studio.isRecording ? .red : .accentColor)
-            .disabled(!studio.isRecording && studio.calibrationIssue != nil)
+            .disabled(studio.isFinalizingRecording || (!studio.isRecording && (studio.calibrationIssue != nil || studio.selectedSourceID == nil || studio.isBenchmarkRunning)))
             .help(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady))
         }
         .padding(.bottom, 12)
@@ -424,9 +439,18 @@ struct StudioView: View {
                     .foregroundStyle(.orange)
             }
             Label(studio.outputProtection != .normal ? localization.text(studio.outputProtection.localizationKey) :
-                    studio.isRecording ? localization.text(.recording) : localization.text(.ready),
+                    localization.text(studio.isFinalizingRecording ? .finalizingTake : studio.isRecording ? .recording : .ready),
                   systemImage: studio.outputProtection != .normal ? "shield.lefthalf.filled" : studio.isRecording ? "record.circle.fill" : "checkmark.circle")
             Spacer()
+            if let url = studio.savedRecording {
+                Button {
+                    initialTakeDirectory = url
+                    showsTakeReview = true
+                } label: {
+                    Label(localization.text(.takeSaved), systemImage: "checkmark.shield")
+                }
+                .help(url.path)
+            }
             Text(localization.text(.metalFrameGraph))
                 .foregroundStyle(.secondary)
         }
