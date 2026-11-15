@@ -61,6 +61,8 @@ final class MetalFramePipeline {
     private let mattePipeline: MTLComputePipelineState
     private let meshPipeline: MTLRenderPipelineState
     private let shadowPipeline: MTLRenderPipelineState
+    private let highPrecisionCompositePipeline: MTLRenderPipelineState
+    private var highPrecisionOutput: MTLTexture?
     private let compositePipeline: MTLRenderPipelineState
     private let depthState: MTLDepthStencilState
     private let conversionEvent: MTLSharedEvent
@@ -111,6 +113,8 @@ final class MetalFramePipeline {
         composite.fragmentFunction = library.makeFunction(name: "studioComposite")
         composite.colorAttachments[0].pixelFormat = pixelFormat
         compositePipeline = try device.makeRenderPipelineState(descriptor: composite)
+        composite.colorAttachments[0].pixelFormat = .rgba16Float
+        highPrecisionCompositePipeline = try device.makeRenderPipelineState(descriptor: composite)
         let depth = MTLDepthStencilDescriptor()
         depth.depthCompareFunction = .lessEqual; depth.isDepthWriteEnabled = true
         guard let state = device.makeDepthStencilState(descriptor: depth) else { throw StudioAssetError.invalid("depth state") }
@@ -195,7 +199,9 @@ final class MetalFramePipeline {
 
     /// Returns an uncommitted final command buffer. The caller may attach a drawable before commit.
     func encode(frame: VideoFrame?, target: MTLTexture, settings inputSettings: StudioRenderSettings,
-                metrics: RealtimeMetricsStore, now: Double, frameSourceID: UUID? = nil) throws -> MTLCommandBuffer {
+                metrics: RealtimeMetricsStore, now: Double, frameSourceID: UUID? = nil,
+                capture10Bit: Bool = false,
+                capture: ((MTLCommandBuffer, MTLTexture, MTLTexture?, MTLFence, TakeAuxiliaryFrame) -> Void)? = nil) throws -> MTLCommandBuffer {
         var resolvedSettings = inputSettings
         let aligned = inputSettings.poseAlignment.flatMap { alignment in
             alignment.sourceID == frameSourceID ? alignment.resolve(videoCaptureTime: frame?.telemetry.captured,now: now) : nil
@@ -366,23 +372,35 @@ final class MetalFramePipeline {
                 dispatch(e,pipeline: mattePipeline,width: target.width,height: target.height)
                 e.updateFence(matteFence); e.endEncoding()
             case "composite":
-                let d = MTLRenderPassDescriptor()
-                d.colorAttachments[0].texture = target; d.colorAttachments[0].loadAction = .dontCare; d.colorAttachments[0].storeAction = .store
-                guard let e = command.makeRenderCommandEncoder(descriptor: d) else { throw StudioAssetError.invalid("composite encoder") }
-                e.label = "Linear composite to SDR output"
-                e.waitForFence(sceneFence,before: .fragment); e.waitForFence(matteFence,before: .fragment)
-                e.setRenderPipelineState(compositePipeline)
-                e.setFragmentTexture(sceneTexture,index: 0); e.setFragmentTexture(videoTexture,index: 1); e.setFragmentTexture(matteTexture,index: 2)
-                e.setFragmentTexture(depthTextures?.depth ?? fallback,index: 3)
-                // Integer textures require a matching integer fallback.
-                e.setFragmentTexture(depthTextures?.confidence ?? depthConfidenceFallback,index: 4)
-                let mode = CompositeDebugView.allCases.firstIndex(of: debugView) ?? 0
-                var options = SIMD4<Float>(Float(mode),blockOutput ? 1 : 0,settings.chromaEnabled ? 1 : 0,depthTextures == nil ? 0 : 1)
-                e.setFragmentBytes(&options,length: MemoryLayout<SIMD4<Float>>.stride,index: 0)
-                var depthParameters = SIMD4<Float>(settings.depthPreviewFarMeters.isFinite ? max(0.5,min(20,settings.depthPreviewFarMeters)) : 10,
-                    Float(target.width)/Float(target.height),0,0)
-                e.setFragmentBytes(&depthParameters,length: MemoryLayout<SIMD4<Float>>.stride,index: 1)
-                e.drawPrimitives(type: .triangle,vertexStart: 0,vertexCount: 3); e.endEncoding()
+                var outputs = [(target, compositePipeline)]
+                if capture10Bit {
+                    if highPrecisionOutput?.width != target.width || highPrecisionOutput?.height != target.height {
+                        highPrecisionOutput = try texture(.rgba16Float, width: target.width, height: target.height,
+                            usage: [.renderTarget, .shaderRead])
+                    }
+                    if let highPrecisionOutput { outputs.append((highPrecisionOutput, highPrecisionCompositePipeline)) }
+                } else {
+                    highPrecisionOutput = nil
+                }
+                for (output, state) in outputs {
+                    let d = MTLRenderPassDescriptor()
+                    d.colorAttachments[0].texture = output; d.colorAttachments[0].loadAction = .dontCare; d.colorAttachments[0].storeAction = .store
+                    guard let e = command.makeRenderCommandEncoder(descriptor: d) else { throw StudioAssetError.invalid("composite encoder") }
+                    e.label = "Linear composite to SDR output"
+                    e.waitForFence(sceneFence,before: .fragment); e.waitForFence(matteFence,before: .fragment)
+                    e.setRenderPipelineState(state)
+                    e.setFragmentTexture(sceneTexture,index: 0); e.setFragmentTexture(videoTexture,index: 1); e.setFragmentTexture(matteTexture,index: 2)
+                    e.setFragmentTexture(depthTextures?.depth ?? fallback,index: 3)
+                    // Integer textures require a matching integer fallback.
+                    e.setFragmentTexture(depthTextures?.confidence ?? depthConfidenceFallback,index: 4)
+                    let mode = CompositeDebugView.allCases.firstIndex(of: debugView) ?? 0
+                    var options = SIMD4<Float>(Float(mode),blockOutput ? 1 : 0,settings.chromaEnabled ? 1 : 0,depthTextures == nil ? 0 : 1)
+                    e.setFragmentBytes(&options,length: MemoryLayout<SIMD4<Float>>.stride,index: 0)
+                    var depthParameters = SIMD4<Float>(settings.depthPreviewFarMeters.isFinite ? max(0.5,min(20,settings.depthPreviewFarMeters)) : 10,
+                        Float(target.width)/Float(target.height),0,0)
+                    e.setFragmentBytes(&depthParameters,length: MemoryLayout<SIMD4<Float>>.stride,index: 1)
+                    e.drawPrimitives(type: .triangle,vertexStart: 0,vertexCount: 3); e.endEncoding()
+                }
             case "matteHistory":
                 if historyMode == .reset || historyMode == .blend {
                     guard let historyVideoTexture, let historyMatteTexture,
@@ -403,6 +421,17 @@ final class MetalFramePipeline {
             metrics.recordGPUCompletion(start: timing.buffer.gpuStartTime,end: completed.gpuEndTime,budget: settings.profile.gpuBudgetMilliseconds)
         }
         matteHistoryPolicy = nextMattePolicy
+        if let capture {
+            let inputTime = frame?.telemetry.captured.flatMap { $0.isFinite ? $0 : nil }
+            let depth = settings.depthPreview.flatMap { input -> DepthPreviewInput? in
+                guard hasVideo, let inputTime, input.isCurrent(sourceID: frameSourceID, now: now),
+                      abs(input.capturedHostSeconds - inputTime) <= 0.1 else { return nil }
+                return input
+            }
+            let auxiliary = TakeAuxiliaryFrame(sourceID: frameSourceID, inputSequence: frame?.identifier,
+                inputHostSeconds: inputTime, depth: depth, pose: hasVideo ? aligned.map(TakeAuxiliaryFrame.Pose.init) : nil)
+            capture(command, highPrecisionOutput ?? target, hasVideo ? matteTexture : nil, matteFence, auxiliary)
+        }
         return command
     }
 

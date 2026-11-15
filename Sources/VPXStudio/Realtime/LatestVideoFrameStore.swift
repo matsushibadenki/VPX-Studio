@@ -19,6 +19,17 @@ final class LatestVideoFrameStore {
         }
     }
 
+    var compositeRecorder: CameraTakeRecorder? {
+        lock.withLock {
+            guard let recorder = recording?.recorder, recorder.composite else { return nil }
+            return recorder
+        }
+    }
+
+    var recordingHealth: (lowStorage: Bool, dropped: Int)? {
+        lock.withLock { recording?.recorder.health }
+    }
+
     var recordingFailed: Bool { lock.withLock { recording?.recorder.hasFailed == true } }
 
     func stopRecording() -> CameraTakeRecorder? {
@@ -73,7 +84,7 @@ final class LatestVideoFrameStore {
         guard sessions[sourceID] == sessionID else { return }
         guard !suspendedSources.contains(sourceID) else { return }
         latest = frame
-        if let recording, recording.sourceID == sourceID, recording.sessionID == sessionID {
+        if let recording, !recording.recorder.composite, recording.sourceID == sourceID, recording.sessionID == sessionID {
             recording.recorder.submit(frame)
         }
     }

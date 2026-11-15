@@ -4,6 +4,10 @@
       "id": "ja",
       "name": "日本語",
       "translations": {
+        "recordingLowStorage": "収録先の空き容量不足", "recordingDrops": "収録処理で落とした映像フレーム数",
+        "recordComposite10Bit": "10-bit合成映像とマイクを収録",
+        "recordCamera10Bit": "10-bit入力を収録（HEVC）",
+        "recordCompositeAudio": "合成映像とマイクを収録",
         "recordCamera": "入力映像を収録", "finalizingTake": "Takeを保存中", "recordingFailed": "映像収録に失敗しました", "takeSaved": "Take保存済み",
         "playTakeAsset": "選択した照合済み映像を再生", "takePreparingPlayback": "再照合・再生準備中", "takePlaybackFailed": "再生できません・再照合や映像形式を確認してください",
         "saveTakeSnapshot": "設定・診断を保存（映像なし）", "takeConfigurationSnapshot": "設定スナップショット（映像なし）", "takeDevices": "機器", "takeProvenanceUnknown": "作成ソフトウェア・機器情報なし",
@@ -47,6 +51,10 @@
       "id": "en",
       "name": "English",
       "translations": {
+        "recordingLowStorage": "Low recording storage", "recordingDrops": "Video frames dropped during recording",
+        "recordComposite10Bit": "Record 10-bit composite and microphone",
+        "recordCamera10Bit": "Record 10-bit input (HEVC)",
+        "recordCompositeAudio": "Record composite and microphone",
         "recordCamera": "Record input", "finalizingTake": "Saving take", "recordingFailed": "Video recording failed", "takeSaved": "Take saved",
         "playTakeAsset": "Play selected verified video", "takePreparingPlayback": "Reverifying and preparing playback", "takePlaybackFailed": "Cannot play; recheck integrity and media format",
         "saveTakeSnapshot": "Save configuration/diagnostics (no video)", "takeConfigurationSnapshot": "Configuration snapshot (no video)", "takeDevices": "Devices", "takeProvenanceUnknown": "Software/device provenance unavailable",
@@ -90,6 +98,10 @@
       "id": "zh-Hans",
       "name": "简体中文",
       "translations": {
+        "recordingLowStorage": "录制磁盘空间不足", "recordingDrops": "录制过程中丢弃的视频帧数",
+        "recordComposite10Bit": "录制10位合成视频与麦克风",
+        "recordCamera10Bit": "录制10位输入（HEVC）",
+        "recordCompositeAudio": "录制合成视频与麦克风",
         "recordCamera": "录制输入视频", "finalizingTake": "正在保存Take", "recordingFailed": "视频录制失败", "takeSaved": "Take已保存",
         "playTakeAsset": "播放所选已验证视频", "takePreparingPlayback": "正在重新验证并准备播放", "takePlaybackFailed": "无法播放；请检查完整性和视频格式",
         "saveTakeSnapshot": "保存设置与诊断（不含视频）", "takeConfigurationSnapshot": "设置快照（不含视频）", "takeDevices": "设备", "takeProvenanceUnknown": "无创建软件或设备信息",

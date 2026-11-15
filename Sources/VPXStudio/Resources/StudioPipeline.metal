@@ -128,3 +128,24 @@ fragment float4 studioComposite(QuadOutput in [[stage_in]], texture2d<float> sce
     // Linear Rec.709/sRGB primaries; the sRGB render target performs the output transfer once.
     return float4(clamp(foreground*alpha+background*(1-alpha),0.0,1.0),1);
 }
+
+// A thread writes one 2×2 block to video-range, MSB-aligned 10-bit 4:2:0.
+kernel void packCompositeMain10(texture2d<float, access::read> linearRGB [[texture(0)]],
+    texture2d<float, access::write> luma [[texture(1)]],
+    texture2d<float, access::write> chroma [[texture(2)]], uint2 block [[thread_position_in_grid]]) {
+    if (block.x >= chroma.get_width() || block.y >= chroma.get_height()) return;
+    constexpr float3 weights = float3(0.2126, 0.7152, 0.0722);
+    constexpr float pack = 64.0 / 65535.0;
+    float2 uv = float2(0);
+    for (uint y = 0; y < 2; ++y) {
+        for (uint x = 0; x < 2; ++x) {
+            uint2 pixel = block * 2 + uint2(x, y);
+            float3 rgb = clamp(linearRGB.read(pixel).rgb, 0.0, 1.0);
+            rgb = select(4.5 * rgb, 1.099 * pow(rgb, float3(0.45)) - 0.099, rgb >= 0.018);
+            float Y = dot(rgb, weights);
+            luma.write(float4(round(64.0 + 876.0 * Y) * pack), pixel);
+            uv += float2((rgb.b - Y) / 1.8556, (rgb.r - Y) / 1.5748);
+        }
+    }
+    chroma.write(float4(round(512.0 + 224.0 * uv) * pack, 0, 1), block);
+}

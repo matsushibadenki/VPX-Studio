@@ -20,7 +20,7 @@ struct MetalPreviewView: NSViewRepresentable {
         view.colorPixelFormat = .bgra8Unorm_srgb
         view.depthStencilPixelFormat = .depth32Float
         view.clearColor = MTLClearColor(red: 0.015, green: 0.02, blue: 0.04, alpha: 1)
-        view.framebufferOnly = true
+        view.framebufferOnly = false
         view.preferredFramesPerSecond = 60
         guard let renderer = MetalRenderer(
             pixelFormat: view.colorPixelFormat,

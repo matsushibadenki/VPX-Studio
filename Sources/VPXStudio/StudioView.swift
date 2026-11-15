@@ -35,7 +35,7 @@ struct StudioView: View {
             get: { studio.recordingError != nil }, set: { if !$0 { studio.recordingError = nil } }
         )) {
             Button(localization.text(.close)) { studio.recordingError = nil }
-        } message: { Text(studio.recordingError ?? "") }
+        } message: { Text(studio.recordingErrorKey.map { localization.text($0) } ?? studio.recordingError ?? "") }
         .onAppear { studio.startPreview() }
         .onDisappear { studio.stopPreview() }
         .sheet(isPresented: $showsDiagnostics) {
@@ -114,23 +114,38 @@ struct StudioView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            Button(studio.isRecording ? localization.text(.stop) : localization.text(studio.isFinalizingRecording ? .finalizingTake : .recordCamera)) {
-                if studio.isRecording { studio.finishCameraRecording() }
-                else {
-                    let panel = NSOpenPanel()
-                    panel.canChooseDirectories = true
-                    panel.canChooseFiles = false
-                    panel.prompt = localization.text(.recordCamera)
-                    panel.begin { response in
-                        if response == .OK, let directory = panel.url { studio.startCameraRecording(in: directory) }
-                    }
+            if studio.isRecording || studio.isPreparingRecording {
+                Button(localization.text(.stop)) { studio.finishCameraRecording() }
+                    .tint(.red)
+            } else if studio.isFinalizingRecording {
+                Label(localization.text(.finalizingTake), systemImage: "hourglass")
+            } else {
+                Menu {
+                    Button(localization.text(.recordCamera)) { chooseRecordingDirectory(composite: false) }
+                    Button(localization.text(.recordCamera10Bit)) { chooseRecordingDirectory(composite: false, preserve10Bit: true) }
+                    Button(localization.text(.recordCompositeAudio)) { chooseRecordingDirectory(composite: true) }
+                    Button(localization.text(.recordComposite10Bit)) { chooseRecordingDirectory(composite: true, preserve10Bit: true) }
+                } label: {
+                    Image(systemName: "record.circle")
+                        .accessibilityLabel(localization.text(.record))
                 }
+                .disabled(!studio.canStartCameraRecording)
+                .help(localization.text(studio.calibrationIssue?.localizationKey ?? .record))
             }
-            .tint(studio.isRecording ? .red : .accentColor)
-            .disabled(studio.isFinalizingRecording || (!studio.isRecording && (studio.calibrationIssue != nil || studio.selectedSourceID == nil || studio.isBenchmarkRunning)))
-            .help(localization.text(studio.calibrationIssue?.localizationKey ?? .calibrationReady))
         }
         .padding(.bottom, 12)
+    }
+
+    private func chooseRecordingDirectory(composite: Bool, preserve10Bit: Bool = false) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = localization.text(composite ? (preserve10Bit ? .recordComposite10Bit : .recordCompositeAudio) : (preserve10Bit ? .recordCamera10Bit : .recordCamera))
+        panel.begin { response in
+            guard response == .OK, let directory = panel.url else { return }
+            if composite { studio.startCompositeRecording(in: directory, preserve10Bit: preserve10Bit) }
+            else { studio.startCameraRecording(in: directory, preserve10Bit: preserve10Bit) }
+        }
     }
 
     private var sourcePanel: some View {
@@ -433,6 +448,16 @@ struct StudioView: View {
 
     private var statusBar: some View {
         HStack {
+            if studio.recordingStorageLow {
+                Label(localization.text(.recordingLowStorage), systemImage: "externaldrive.badge.exclamationmark")
+                    .foregroundStyle(.orange)
+            }
+            if studio.isRecording && studio.recordingDroppedFrames > 0 {
+                Label("\(studio.recordingDroppedFrames)", systemImage: "exclamationmark.circle")
+                    .foregroundStyle(.orange)
+                    .help(localization.text(.recordingDrops))
+                    .accessibilityLabel(localization.text(.recordingDrops))
+            }
             if studio.inputHealth != .active {
                 Label(localization.text(studio.inputHealth == .stale ? .videoInputStale : .noInput),
                       systemImage: "exclamationmark.triangle.fill")

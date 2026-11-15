@@ -54,14 +54,18 @@ final class MacCameraVideoSource: NSObject, VideoSource {
         captureSession.addInput(input)
 
         output.alwaysDiscardsLateVideoFrames = true
-        output.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-        ]
         output.setSampleBufferDelegate(self, queue: captureQueue)
         guard captureSession.canAddOutput(output) else {
             throw VideoSourceError.cannotCreateInput
         }
         captureSession.addOutput(output)
+        let nativeFormat = CMFormatDescriptionGetMediaSubType(device.activeFormat.formatDescription)
+        let native10Bit = (nativeFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange ||
+            nativeFormat == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange) &&
+            output.availableVideoPixelFormatTypes.contains(nativeFormat)
+        output.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: native10Bit ? nativeFormat : kCVPixelFormatType_32BGRA
+        ]
     }
 
     func start() throws {

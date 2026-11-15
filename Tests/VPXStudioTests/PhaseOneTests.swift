@@ -122,6 +122,26 @@ final class PhaseOneTests: XCTestCase {
         return (Array(bytes[(16*32+16)*4..<(16*32+16)*4+4]),metrics.read())
     }
 
+    func testCompositeCaptureReceivesLinearFloatOutput() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("Metal unavailable") }
+        let pipeline = try MetalFramePipeline(device: device, pixelFormat: .bgra8Unorm_srgb)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm_srgb,
+            width: 32, height: 32, mipmapped: false)
+        descriptor.usage = .renderTarget
+        let preview = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
+        let frame = try image(color: 0xFF808080)
+        var capturedFormat: MTLPixelFormat?
+        let command = try pipeline.encode(frame: frame, target: preview, settings: StudioRenderSettings(),
+            metrics: RealtimeMetricsStore(), now: CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock())),
+            capture10Bit: true) { _, output, _, _, _ in
+                capturedFormat = output.pixelFormat
+            }
+        command.commit()
+        command.waitUntilCompleted()
+        XCTAssertEqual(command.status, .completed)
+        XCTAssertEqual(capturedFormat, .rgba16Float)
+    }
+
     func testGPUCompositeSRGBDoesNotDoubleEncodeAndMatteKeysGreen() throws {
         let gray = try render(image(color: 0xFF808080))
         XCTAssertEqual(gray.1.protection,.normal)

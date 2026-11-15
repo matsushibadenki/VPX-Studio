@@ -1,9 +1,10 @@
 import AVFoundation
 import Foundation
+import VideoToolbox
 
 /// One recording owns one writer. Capture callbacks never wait for disk or encoding.
 final class CameraTakeRecorder: @unchecked Sendable {
-    enum Failure: Error { case noFrames, writerFailed, formatChanged, destinationExists }
+    enum Failure: Error { case insufficientStorage, requires10BitInput, invalid10BitOutput, noAudio, noFrames, writerFailed, formatChanged, destinationExists }
     struct Statistics: Codable, Sendable {
         let sourceID: UUID
         var frames = 0
@@ -11,11 +12,16 @@ final class CameraTakeRecorder: @unchecked Sendable {
         var width = 0
         var height = 0
         var pixelFormat: UInt32 = 0
+        var encodedBitDepth: Int?
+        var audioBuffers: Int?
+        var audioDropped: Int?
     }
 
     private struct Sample: @unchecked Sendable {
         let buffer: CVPixelBuffer
         let time: CMTime
+        let auxiliary: TakeAuxiliaryFrame?
+        let matte: TakeMatteCopy?
     }
 
     private let queue = DispatchQueue(label: "studio.vpx.take-writer", qos: .userInitiated)
@@ -23,6 +29,37 @@ final class CameraTakeRecorder: @unchecked Sendable {
     private let slots = DispatchSemaphore(value: 4)
     private var accepting = true
     private var overflow = 0
+    private var writerDrops = 0
+    private var lowStorage = false
+    private var lastStorageCheck: UInt64 = 0
+    private static let storageReserve: UInt64 = 256 * 1024 * 1024
+
+    var health: (lowStorage: Bool, dropped: Int) {
+        lock.withLock { (lowStorage, overflow + writerDrops) }
+    }
+
+    private static func hasStorage(at directory: URL) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: directory.path),
+              let bytes = attributes[.systemFreeSize] as? NSNumber else { return true }
+        return bytes.uint64Value >= storageReserve
+    }
+
+    private func checkStorage() -> Bool {
+        let now = DispatchTime.now().uptimeNanoseconds
+        if now - lastStorageCheck >= 1_000_000_000 {
+            lastStorageCheck = now
+            if !Self.hasStorage(at: staging) {
+                lock.withLock { lowStorage = true }
+            }
+        }
+        return !health.lowStorage
+    }
+
+    private func dropWriterFrame() {
+        stats.dropped += 1
+        lock.withLock { writerDrops += 1 }
+    }
+
     private var failed = false
     var hasFailed: Bool { lock.withLock { failed } }
     private var stats: Statistics
@@ -32,14 +69,29 @@ final class CameraTakeRecorder: @unchecked Sendable {
     private var start: CMTime?
     private var last: CMTime?
     private var failure: (any Error)?
+    let composite: Bool
+    let preserve10Bit: Bool
+    private var audioInput: AVAssetWriterInput?
+    private let audioSlots = DispatchSemaphore(value: 16)
+    private var audioOverflow = 0
+    private var lastAudio: CMTime?
+    private struct AudioSample: @unchecked Sendable {
+        let buffer: CMSampleBuffer
+        let time: CMTime
+    }
+    private var movieName: String { composite ? "composite.mov" : "camera.mov" }
+    private let auxiliaryTracks: TakeAuxiliaryTracks?
     private let request: TakeSnapshotRequest
     private let parent: URL
     private let scoped: Bool
     private let staging: URL
     private let destination: URL
 
-    init(request: TakeSnapshotRequest, parent: URL, sourceID: UUID) throws {
+    init(request: TakeSnapshotRequest, parent: URL, sourceID: UUID, composite: Bool = false, preserve10Bit: Bool = false) throws {
+        self.preserve10Bit = preserve10Bit
+        self.composite = composite
         stats = Statistics(sourceID: sourceID)
+        if composite { stats.audioBuffers = 0; stats.audioDropped = 0 }
         self.request = request
         self.parent = parent
         staging = parent.appendingPathComponent(".vpx-recording-\(request.manifest.id)", isDirectory: true)
@@ -47,11 +99,13 @@ final class CameraTakeRecorder: @unchecked Sendable {
         let didScope = parent.startAccessingSecurityScopedResource()
         do {
             guard !FileManager.default.fileExists(atPath: destination.path) else { throw Failure.destinationExists }
+            guard Self.hasStorage(at: parent) else { throw Failure.insufficientStorage }
             try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
         } catch {
             if didScope { parent.stopAccessingSecurityScopedResource() }
             throw error
         }
+        auxiliaryTracks = composite ? TakeAuxiliaryTracks(directory: staging) : nil
         scoped = didScope
     }
 
@@ -60,14 +114,21 @@ final class CameraTakeRecorder: @unchecked Sendable {
         if scoped { parent.stopAccessingSecurityScopedResource() }
     }
 
+    func dropVideoFrame() { lock.withLock { if accepting { overflow += 1 } } }
+
     func submit(_ frame: VideoFrame) {
+        submitVideo(frame.pixelBuffer, at: frame.hostReceiveTime)
+    }
+
+    func submitVideo(_ buffer: CVPixelBuffer, at time: CMTime,
+                     auxiliary: TakeAuxiliaryFrame? = nil, matte: TakeMatteCopy? = nil) {
         lock.withLock {
-            guard accepting, !failed else { return }
+            guard accepting, !failed, !lowStorage else { return }
             guard slots.wait(timeout: .now()) == .success else { overflow += 1; return }
-            let sample = Sample(buffer: frame.pixelBuffer, time: frame.hostReceiveTime)
+            let sample = Sample(buffer: buffer, time: time, auxiliary: auxiliary, matte: matte)
             queue.async { [self] in
                 defer { slots.signal() }
-                guard failure == nil else { return }
+                guard failure == nil, checkStorage() else { return }
                 do { try append(sample) }
                 catch {
                     failure = error
@@ -80,18 +141,47 @@ final class CameraTakeRecorder: @unchecked Sendable {
 
     private func append(_ sample: Sample) throws {
         guard sample.time.isNumeric, last.map({ CMTimeCompare(sample.time, $0) > 0 }) ?? true else {
-            stats.dropped += 1; return
+            dropWriterFrame(); return
         }
         let width = CVPixelBufferGetWidth(sample.buffer), height = CVPixelBufferGetHeight(sample.buffer)
         let format = CVPixelBufferGetPixelFormatType(sample.buffer)
+        if preserve10Bit {
+            guard format == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange ||
+                format == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange else { throw Failure.requires10BitInput }
+        }
         if writer == nil {
-            let writer = try AVAssetWriter(outputURL: staging.appendingPathComponent("camera.mov"), fileType: .mov)
-            let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-                AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: width, AVVideoHeightKey: height
-            ])
+            let writer = try AVAssetWriter(outputURL: staging.appendingPathComponent(movieName), fileType: .mov)
+            var settings: [String: Any] = [
+                AVVideoCodecKey: preserve10Bit ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
+                AVVideoWidthKey: width, AVVideoHeightKey: height
+            ]
+            if preserve10Bit {
+                if composite {
+                    settings[AVVideoColorPropertiesKey] = [
+                        AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                        AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                        AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
+                    ]
+                }
+                settings[AVVideoCompressionPropertiesKey] = [
+                    AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel
+                ]
+            }
+            guard writer.canApply(outputSettings: settings, forMediaType: .video) else { throw Failure.writerFailed }
+            let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
             input.expectsMediaDataInRealTime = true
             guard writer.canAdd(input) else { throw Failure.writerFailed }
             writer.add(input)
+            if composite {
+                let audio = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                    AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48_000,
+                    AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 96_000
+                ])
+                audio.expectsMediaDataInRealTime = true
+                guard writer.canAdd(audio) else { throw Failure.writerFailed }
+                writer.add(audio)
+                audioInput = audio
+            }
             let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
             guard writer.startWriting() else { throw writer.error ?? Failure.writerFailed }
             writer.startSession(atSourceTime: .zero)
@@ -102,11 +192,52 @@ final class CameraTakeRecorder: @unchecked Sendable {
         guard let writer, writer.status == .writing, let input, let adaptor, let start else {
             throw writer?.error ?? Failure.writerFailed
         }
-        guard input.isReadyForMoreMediaData else { stats.dropped += 1; return }
-        guard adaptor.append(sample.buffer, withPresentationTime: CMTimeSubtract(sample.time, start)) else {
+        guard input.isReadyForMoreMediaData else { dropWriterFrame(); return }
+        let pts = CMTimeSubtract(sample.time, start)
+        guard adaptor.append(sample.buffer, withPresentationTime: pts) else {
             throw writer.error ?? Failure.writerFailed
         }
+        try auxiliaryTracks?.append(frame: sample.auxiliary, matte: sample.matte, index: stats.frames, time: pts)
         last = sample.time; stats.frames += 1
+    }
+
+    func submitAudio(_ buffer: CMSampleBuffer, at hostTime: CMTime) {
+        lock.withLock {
+            guard composite, accepting, !failed, !lowStorage else { return }
+            guard audioSlots.wait(timeout: .now()) == .success else { audioOverflow += 1; return }
+            let sample = AudioSample(buffer: buffer, time: hostTime)
+            queue.async { [self] in
+                defer { audioSlots.signal() }
+                guard failure == nil, checkStorage() else { return }
+                do { try appendAudio(sample) }
+                catch {
+                    failure = error
+                    lock.withLock { failed = true }
+                    writer?.cancelWriting()
+                }
+            }
+        }
+    }
+
+    private func appendAudio(_ sample: AudioSample) throws {
+        guard let start, let audioInput else { return }
+        let time = CMTimeSubtract(sample.time, start)
+        guard time.isNumeric, time >= .zero, lastAudio.map({ time > $0 }) ?? true,
+              audioInput.isReadyForMoreMediaData else {
+            stats.audioDropped? += 1
+            return
+        }
+        let timing = try sample.buffer.sampleTimingInfos()
+        let shift = CMTimeSubtract(time, sample.buffer.presentationTimeStamp)
+        let adjusted = timing.map { item in
+            CMSampleTimingInfo(duration: item.duration,
+                presentationTimeStamp: CMTimeAdd(item.presentationTimeStamp, shift),
+                decodeTimeStamp: item.decodeTimeStamp.isNumeric ? CMTimeAdd(item.decodeTimeStamp, shift) : .invalid)
+        }
+        let buffer = try CMSampleBuffer(copying: sample.buffer, withNewTiming: adjusted)
+        guard audioInput.append(buffer) else { throw writer?.error ?? Failure.writerFailed }
+        lastAudio = time
+        stats.audioBuffers? += 1
     }
 
     func finish() async throws -> URL {
@@ -115,23 +246,60 @@ final class CameraTakeRecorder: @unchecked Sendable {
                 guard accepting else { continuation.resume(throwing: Failure.writerFailed); return }
                 accepting = false
                 let dropped = overflow
+                let audioDropped = audioOverflow
                 queue.async { [self] in
                     stats.dropped += dropped
+                    stats.audioDropped? += audioDropped
                     if let failure { continuation.resume(throwing: failure); return }
                     guard let writer, let input, stats.frames > 0 else {
-                        writer?.cancelWriting(); continuation.resume(throwing: Failure.noFrames); return
+                        writer?.cancelWriting()
+                        continuation.resume(throwing: health.lowStorage ? Failure.insufficientStorage : Failure.noFrames)
+                        return
+                    }
+                    if composite && stats.audioBuffers == 0 {
+                        writer.cancelWriting(); continuation.resume(throwing: Failure.noAudio); return
                     }
                     input.markAsFinished()
+                    audioInput?.markAsFinished()
                     writer.finishWriting { [self] in
                         queue.async { [self] in
-                            do {
-                                guard self.writer?.status == .completed else { throw self.writer?.error ?? Failure.writerFailed }
-                                continuation.resume(returning: try publish())
-                            } catch { continuation.resume(throwing: error) }
+                            guard self.writer?.status == .completed else {
+                                continuation.resume(throwing: self.writer?.error ?? Failure.writerFailed)
+                                return
+                            }
+                            if preserve10Bit {
+                                let url = staging.appendingPathComponent(movieName)
+                                Task {
+                                    do {
+                                        try await Self.verify10BitMovie(at: url)
+                                        queue.async { [self] in
+                                            stats.encodedBitDepth = 10
+                                            continuation.resume(with: Result { try publish() })
+                                        }
+                                    } catch { continuation.resume(throwing: error) }
+                                }
+                            } else {
+                                continuation.resume(with: Result { try publish() })
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private static func verify10BitMovie(at url: URL) async throws {
+        let tracks = try await AVURLAsset(url: url).loadTracks(withMediaType: .video)
+        guard let track = tracks.first else { throw Failure.invalid10BitOutput }
+        let formats = try await track.load(.formatDescriptions)
+        guard !formats.isEmpty else { throw Failure.invalid10BitOutput }
+        for format in formats {
+            let extensions = CMFormatDescriptionGetExtensions(format) as NSDictionary?
+            let atoms = extensions?[kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms] as? [String: Data]
+            // HEVCDecoderConfigurationRecord stores luma/chroma bit depth minus eight.
+            guard CMFormatDescriptionGetMediaSubType(format) == kCMVideoCodecType_HEVC,
+                  let record = atoms?["hvcC"], record.count >= 23, record[0] == 1,
+                  record[17] & 7 == 2, record[18] & 7 == 2 else { throw Failure.invalid10BitOutput }
         }
     }
 
@@ -145,7 +313,8 @@ final class CameraTakeRecorder: @unchecked Sendable {
         guard let provenance = manifest.provenance else { throw Failure.writerFailed }
         manifest.name = "VPX Take"
         manifest.provenance = .init(kind: .recording, software: provenance.software, devices: provenance.devices, calibration: provenance.calibration)
-        manifest.assets += [.init(role: .camera, relativePath: "camera.mov"), .init(role: .diagnostics, relativePath: "recording.json")]
+        manifest.assets += [.init(role: composite ? .composite : .camera, relativePath: movieName), .init(role: .diagnostics, relativePath: "recording.json")]
+        manifest.assets += try auxiliaryTracks?.close() ?? []
         try manifest.sealAssets(in: staging)
         try manifest.save(to: staging)
         try FileManager.default.moveItem(at: staging, to: destination)

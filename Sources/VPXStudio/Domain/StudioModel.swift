@@ -94,15 +94,63 @@ final class StudioModel {
     var inputColorMetadata = ""
     private(set) var isFinalizingRecording = false
     var recordingError: String?
+    private(set) var recordingStorageLow = false
+    private(set) var recordingDroppedFrames = 0
+    var recordingErrorKey: LocalizationKey? {
+        recordingError == String(describing: CameraTakeRecorder.Failure.insufficientStorage) ? .recordingLowStorage : nil
+    }
+
     private(set) var savedRecording: URL?
 
-    func startCameraRecording(in directory: URL) {
+    private var microphone: TakeMicrophone?
+    private var recordingStartID: UUID?
+    var isPreparingRecording: Bool { recordingStartID != nil }
+
+    func startCompositeRecording(in directory: URL, preserve10Bit: Bool = false) {
+        guard !isPreparingRecording, canStartCameraRecording, let sourceID = selectedSourceID else { return }
+        let id = UUID()
+        recordingStartID = id
+        recordingStorageLow = false
+        recordingDroppedFrames = 0
+        recordingError = nil
+        savedRecording = nil
+        Task {
+            defer { if recordingStartID == id { recordingStartID = nil } }
+            do {
+                let granted = await AVCaptureDevice.requestAccess(for: .audio)
+                guard recordingStartID == id else { return }
+                guard granted else { throw TakeMicrophone.Failure.permissionDenied }
+                guard canStartCameraRecording, selectedSourceID == sourceID else { return }
+                let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory,
+                    sourceID: sourceID, composite: true, preserve10Bit: preserve10Bit)
+                let microphone = TakeMicrophone(recorder: recorder)
+                try await microphone.start()
+                guard recordingStartID == id, canStartCameraRecording, selectedSourceID == sourceID,
+                      realtimeCore.latestVideoFrame.startRecording(recorder, sourceID: sourceID) else {
+                    microphone.stop()
+                    return
+                }
+                self.microphone = microphone
+                isRecording = true
+            } catch {
+                if recordingStartID == id { recordingError = String(describing: error) }
+            }
+        }
+    }
+
+    var canStartCameraRecording: Bool {
         guard !isRecording, !isFinalizingRecording, !isBenchmarkRunning, let id = selectedSourceID,
-              benchmarkSource?.descriptor.id != id, calibrationIssue == nil,
-              deviceRegistry.devices.contains(where: { $0.id == id && $0.state == .connected }) else { return }
+              benchmarkSource?.descriptor.id != id, calibrationIssue == nil else { return false }
+        return deviceRegistry.devices.contains { $0.id == id && $0.state == .connected }
+    }
+
+    func startCameraRecording(in directory: URL, preserve10Bit: Bool = false) {
+        guard !isPreparingRecording, canStartCameraRecording, let id = selectedSourceID else { return }
+        recordingStorageLow = false
+        recordingDroppedFrames = 0
         recordingError = nil; savedRecording = nil
         do {
-            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory, sourceID: id)
+            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory, sourceID: id, preserve10Bit: preserve10Bit)
             guard realtimeCore.latestVideoFrame.startRecording(recorder, sourceID: id) else { return }
             isRecording = true
             if !isRecording { _ = realtimeCore.latestVideoFrame.stopRecording() }
@@ -110,6 +158,9 @@ final class StudioModel {
     }
 
     func finishCameraRecording() {
+        recordingStartID = nil
+        microphone?.stop()
+        microphone = nil
         guard let recorder = realtimeCore.latestVideoFrame.stopRecording() else { return }
         isRecording = false; isFinalizingRecording = true
         Task {
@@ -725,6 +776,13 @@ final class StudioModel {
     }
 
     func refreshMetrics() {
+        if let health = realtimeCore.latestVideoFrame.recordingHealth {
+            recordingDroppedFrames = health.dropped
+            if health.lowStorage {
+                recordingStorageLow = true
+                finishCameraRecording()
+            }
+        }
         if realtimeCore.latestVideoFrame.recordingFailed { finishCameraRecording() }
         realtimeCore.metrics.sampleMemory()
         let now = DispatchTime.now().uptimeNanoseconds

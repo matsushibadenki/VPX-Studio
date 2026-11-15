@@ -4,6 +4,7 @@ import os
 
 /// SwiftUI changes immutable settings; only the render thread owns the frame pipeline.
 final class MetalRenderer: NSObject, MTKViewDelegate {
+    private let capture: CompositeCapture
     private let pipeline: MetalFramePipeline
     private let latestVideoFrame: LatestVideoFrameStore
     private let metrics: RealtimeMetricsStore
@@ -16,6 +17,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         guard let device = MTLCreateSystemDefaultDevice() else { return nil }
         do { pipeline = try MetalFramePipeline(device: device,pixelFormat: pixelFormat) }
         catch { Logger(subsystem: "jp.vpxstudio",category: "renderer").error("Pipeline: \(error.localizedDescription)"); return nil }
+        capture = CompositeCapture(device: device)
         self.latestVideoFrame = latestVideoFrame; self.metrics = metrics
         super.init()
     }
@@ -24,12 +26,23 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable else { return }
+        let captureTime = CMClockGetTime(CMClockGetHostTimeClock())
         let now = CACurrentMediaTime(), snapshot = latestVideoFrame.readSnapshot()
         let frame = snapshot.frame
         let settings = settingsLock.withLock { storedSettings }
         do {
-            let command = try pipeline.encode(frame: frame,target: drawable.texture,settings: settings,metrics: metrics,now: now,
-                frameSourceID: snapshot.sourceID)
+            let recorder = settings.debugView == .composite ? latestVideoFrame.compositeRecorder : nil
+            let recordFrame: ((MTLCommandBuffer, MTLTexture, MTLTexture?, MTLFence, TakeAuxiliaryFrame) -> Void)?
+            if let recorder {
+                recordFrame = { command, output, matte, fence, auxiliary in
+                    self.capture.encode(output, on: command, to: recorder, at: captureTime,
+                        auxiliary: auxiliary, matte: matte, matteFence: fence)
+                }
+            } else {
+                recordFrame = nil
+            }
+            let command = try pipeline.encode(frame: frame, target: drawable.texture, settings: settings, metrics: metrics,
+                now: now, frameSourceID: snapshot.sourceID, capture10Bit: recorder?.preserve10Bit == true, capture: recordFrame)
             command.present(drawable)
             let captured = metrics.read().protection == .normal ? frame?.telemetry.captured : nil
             drawable.addPresentedHandler { [metrics] drawable in

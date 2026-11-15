@@ -1,5 +1,9 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+let studioInfo = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    .appendingPathComponent("Sources/VPXStudio/StudioInfo.plist").path
 
 let package = Package(
     name: "VPXStudio",
@@ -23,11 +27,14 @@ let package = Package(
         .executableTarget(
             name: "VPXStudio",
             dependencies: ["VPXCaptureProtocol"],
+            exclude: ["StudioInfo.plist"],
             resources: [
                 .copy("Resources/PreviewShaders.metal"),
                 .copy("Resources/StudioPipeline.metal"),
                 .process("Resources/LocalizationCatalog.json")
-            ]
+            ],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT",
+                "-Xlinker", "__info_plist", "-Xlinker", studioInfo], .when(platforms: [.macOS]))]
         ),
         .testTarget(
             name: "VPXStudioTests",
