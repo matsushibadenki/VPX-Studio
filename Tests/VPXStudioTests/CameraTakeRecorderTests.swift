@@ -124,6 +124,9 @@ final class CameraTakeRecorderTests: XCTestCase {
             from: Data(contentsOf: directory.appendingPathComponent("recording.json")))
         XCTAssertEqual(stats.encodedBitDepth, preserve10Bit ? 10 : nil)
         XCTAssertTrue(Set(review.manifest.assets.map(\.relativePath)).isSuperset(of: ["matte.f16le", "depth.bin", "frames.jsonl"]))
+        let frameRows = try await TakeReviewService().loadFrameIndex(directory: directory, manifest: review.manifest)
+        XCTAssertEqual(frameRows.map(\.frameIndex), [0])
+        XCTAssertEqual(frameRows.first?.inputSequence, 11)
         let index = try Data(contentsOf: directory.appendingPathComponent("frames.jsonl"))
         let row = try JSONDecoder().decode(TakeAuxiliaryTracks.Row.self, from: index)
         let range = try await video[0].load(.timeRange)
@@ -171,7 +174,9 @@ final class CameraTakeRecorderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: parent) }
         let request = try StudioModel().takeSnapshotRequest()
         let source = UUID(), session = UUID()
-        let recorder = try CameraTakeRecorder(request: request, parent: parent, sourceID: source)
+        let scene = StudioScene.demo
+        let recorder = try CameraTakeRecorder(request: request, parent: parent, sourceID: source,
+            sceneSnapshot: TakeSceneSnapshot(scene: scene))
         let store = LatestVideoFrameStore()
         store.selectSource(source)
         store.beginSession(sourceID: source, sessionID: session)
@@ -195,6 +200,18 @@ final class CameraTakeRecorderTests: XCTestCase {
         let review = try await TakeReviewService().inspect(directory: url)
         XCTAssertTrue(review.allVerified)
         XCTAssertEqual(review.manifest.provenance?.kind, .recording)
+        let sceneAsset = try XCTUnwrap(review.manifest.assets.first { $0.role == .scene })
+        let archived = try JSONDecoder().decode(TakeSceneSnapshot.self,
+            from: Data(contentsOf: url.appendingPathComponent(sceneAsset.relativePath)))
+        let service = TakeReviewService()
+        let restored = try await service.restoreScene(directory: url, manifest: review.manifest,
+            relativePath: sceneAsset.relativePath)
+        XCTAssertEqual(restored.id, scene.id)
+        XCTAssertTrue(StudioModel().restoreTakeScene(restored))
+        XCTAssertEqual(archived.id, scene.id)
+        XCTAssertEqual(archived.meshes.map { $0.vertices.count }, scene.meshes.map { $0.vertices.count })
+        XCTAssertEqual(archived.meshes.first?.vertices.first?.position, scene.meshes.first?.vertices.first?.position)
+
         let media = try review.manifest.verifiedPlaybackURL(relativePath: "camera.mov", in: url)
         let playable = try await AVURLAsset(url: media).load(.isPlayable)
         XCTAssertTrue(playable)
@@ -203,6 +220,13 @@ final class CameraTakeRecorderTests: XCTestCase {
         XCTAssertEqual(stats.frames, 2)
         XCTAssertEqual(stats.sourceID, source)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: parent.path), [url.lastPathComponent])
+        try Data("altered scene".utf8).write(to: url.appendingPathComponent(sceneAsset.relativePath))
+        do {
+            _ = try await service.restoreScene(directory: url, manifest: review.manifest,
+                relativePath: sceneAsset.relativePath)
+            XCTFail("A scene changed after review must be rejected")
+        } catch TakeManifest.PlaybackError.modified {}
+
     }
 
     @MainActor

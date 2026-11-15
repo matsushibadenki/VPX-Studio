@@ -95,6 +95,8 @@ final class StudioModel {
     private(set) var isFinalizingRecording = false
     var recordingError: String?
     private(set) var recordingStorageLow = false
+    private(set) var recordingWriteDelayed = false
+    private(set) var recordingSecondsRemaining: Int?
     private(set) var recordingDroppedFrames = 0
     var recordingErrorKey: LocalizationKey? {
         recordingError == String(describing: CameraTakeRecorder.Failure.insufficientStorage) ? .recordingLowStorage : nil
@@ -112,6 +114,8 @@ final class StudioModel {
         recordingStartID = id
         recordingStorageLow = false
         recordingDroppedFrames = 0
+        recordingWriteDelayed = false
+        recordingSecondsRemaining = nil
         recordingError = nil
         savedRecording = nil
         Task {
@@ -122,7 +126,8 @@ final class StudioModel {
                 guard granted else { throw TakeMicrophone.Failure.permissionDenied }
                 guard canStartCameraRecording, selectedSourceID == sourceID else { return }
                 let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory,
-                    sourceID: sourceID, composite: true, preserve10Bit: preserve10Bit)
+                    sourceID: sourceID, composite: true, preserve10Bit: preserve10Bit,
+                    sceneSnapshot: TakeSceneSnapshot(scene: scene))
                 let microphone = TakeMicrophone(recorder: recorder)
                 try await microphone.start()
                 guard recordingStartID == id, canStartCameraRecording, selectedSourceID == sourceID,
@@ -148,9 +153,12 @@ final class StudioModel {
         guard !isPreparingRecording, canStartCameraRecording, let id = selectedSourceID else { return }
         recordingStorageLow = false
         recordingDroppedFrames = 0
+        recordingWriteDelayed = false
+        recordingSecondsRemaining = nil
         recordingError = nil; savedRecording = nil
         do {
-            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory, sourceID: id, preserve10Bit: preserve10Bit)
+            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory, sourceID: id, preserve10Bit: preserve10Bit,
+                sceneSnapshot: TakeSceneSnapshot(scene: scene))
             guard realtimeCore.latestVideoFrame.startRecording(recorder, sourceID: id) else { return }
             isRecording = true
             if !isRecording { _ = realtimeCore.latestVideoFrame.stopRecording() }
@@ -299,6 +307,20 @@ final class StudioModel {
         return settings
     }
 
+    var canRestoreTakeScene: Bool {
+        mode != .live && mode != .record && !isRecording && !isPreparingRecording && !isFinalizingRecording
+    }
+
+    @discardableResult
+    func restoreTakeScene(_ restored: StudioScene) -> Bool {
+        guard canRestoreTakeScene else { return false }
+        var restored = restored
+        restored.id = UUID()
+        scene = restored
+        resetTrackingOrigin()
+        return true
+    }
+
     func loadScene(from url: URL) async {
         guard mode != .live, mode != .record, !isRecording else { return }
         do {
@@ -316,18 +338,30 @@ final class StudioModel {
         do {
             let (loaded, profile) = try await Task.detached { try CalibrationProfile.loadCameraOrProfile(url) }.value
             guard mode != .live, mode != .record, !isRecording else { return }
-            if profile?.stageRegistration == nil { resetTrackingOrigin() }
-            if let profile, profile.revision <= (invalidatedCalibrationRevisions[profile.id] ?? 0) {
-                throw StudioAssetError.invalid("calibration reference changed; provide a revalidated revision")
-            }
-            cameraCalibration = loaded
-            calibrationProfile = profile
-            focalLengthMillimeters = loaded.referenceFocalLengthMillimeters
-            radialDistortionK1 = loaded.k1
-            if let focus = profile?.checkerboardMeasurement?.focusDistanceMeters { focusDistanceMeters = focus }
-            calibrationReferenceInvalidated = false
+            try applyCalibration(loaded, profile: profile)
         }
         catch { assetImportError = error.localizedDescription }
+    }
+
+    func restoreTakeCalibration(_ profile: CalibrationProfile) throws {
+        guard canRestoreTakeScene, selectedSourceID == profile.cameraID else {
+            throw StudioAssetError.invalid("Take calibration camera or operating mode")
+        }
+        cancelCheckerboardSolve()
+        try applyCalibration(profile.camera, profile: profile)
+    }
+
+    private func applyCalibration(_ loaded: CameraCalibration, profile: CalibrationProfile?) throws {
+        if profile?.stageRegistration == nil { resetTrackingOrigin() }
+        if let profile, profile.revision <= (invalidatedCalibrationRevisions[profile.id] ?? 0) {
+            throw StudioAssetError.invalid("calibration reference changed; provide a revalidated revision")
+        }
+        cameraCalibration = loaded
+        calibrationProfile = profile
+        focalLengthMillimeters = loaded.referenceFocalLengthMillimeters
+        radialDistortionK1 = loaded.k1
+        if let focus = profile?.checkerboardMeasurement?.focusDistanceMeters { focusDistanceMeters = focus }
+        calibrationReferenceInvalidated = false
     }
 
     func clearCalibration() {
@@ -778,6 +812,8 @@ final class StudioModel {
     func refreshMetrics() {
         if let health = realtimeCore.latestVideoFrame.recordingHealth {
             recordingDroppedFrames = health.dropped
+            recordingWriteDelayed = health.writeDelayed
+            recordingSecondsRemaining = health.secondsRemaining
             if health.lowStorage {
                 recordingStorageLow = true
                 finishCameraRecording()

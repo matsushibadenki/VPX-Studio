@@ -1,16 +1,16 @@
 import Foundation
 import simd
 
-struct SceneVertex: Sendable {
+struct SceneVertex: Codable, Sendable {
     var position: SIMD4<Float>
     var normal: SIMD4<Float>
 }
-struct SceneMaterial: Sendable {
+struct SceneMaterial: Codable, Sendable {
     var baseColor = SIMD4<Float>(0.12, 0.35, 0.75, 1)
     var metallic: Float = 0
     var roughness: Float = 0.5
 }
-struct SceneMesh: Sendable { var vertices: [SceneVertex]; var material: SceneMaterial }
+struct SceneMesh: Codable, Sendable { var vertices: [SceneVertex]; var material: SceneMaterial }
 struct StudioScene: Sendable {
     var id = UUID()
     var name: String
@@ -39,6 +39,45 @@ struct StudioScene: Sendable {
         let floor = [0,1,2,0,2,3].map { SceneVertex(position: SIMD4(ground[$0],1), normal: SIMD4(0,1,0,0)) }
         return StudioScene(name: "VPX Demo", meshes: [.init(vertices: vertices, material: .init()),
             .init(vertices: floor, material: .init(baseColor: SIMD4(0.3,0.3,0.3,1), metallic: 0, roughness: 0.8))])
+    }
+}
+
+/// Versioned snapshot of the exact static scene consumed by the renderer.
+struct TakeSceneSnapshot: Codable, Sendable {
+    let schemaVersion: Int
+    let id: UUID
+    let name: String
+    let meshes: [SceneMesh]
+    let lightDirection: SIMD3<Float>
+    let lightColor: SIMD3<Float>
+    let lightIntensity: Float
+    let cameraWorldTransform: [SIMD4<Float>]
+
+    init(scene: StudioScene) {
+        schemaVersion = 1
+        id = scene.id
+        name = scene.name
+        meshes = scene.meshes
+        lightDirection = scene.lightDirection
+        lightColor = scene.lightColor
+        lightIntensity = scene.lightIntensity
+        let columns = scene.cameraWorldTransform.columns
+        cameraWorldTransform = [columns.0, columns.1, columns.2, columns.3]
+    }
+
+    func restore() throws -> StudioScene {
+        guard schemaVersion == 1, cameraWorldTransform.count == 4,
+              !name.isEmpty, !meshes.isEmpty,
+              meshes.allSatisfy({ !$0.vertices.isEmpty && $0.vertices.count.isMultiple(of: 3) }) else {
+            throw StudioAssetError.invalid("Take scene")
+        }
+        let camera = simd_float4x4(columns: (cameraWorldTransform[0], cameraWorldTransform[1],
+            cameraWorldTransform[2], cameraWorldTransform[3]))
+        guard abs(simd_determinant(camera)) > 1e-6, simd_length_squared(lightDirection) > 1e-6 else {
+            throw StudioAssetError.invalid("Take scene transform")
+        }
+        return StudioScene(id: id, name: name, meshes: meshes, lightDirection: lightDirection,
+            lightColor: lightColor, lightIntensity: lightIntensity, cameraWorldTransform: camera)
     }
 }
 

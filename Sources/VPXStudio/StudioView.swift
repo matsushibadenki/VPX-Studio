@@ -452,6 +452,18 @@ struct StudioView: View {
                 Label(localization.text(.recordingLowStorage), systemImage: "externaldrive.badge.exclamationmark")
                     .foregroundStyle(.orange)
             }
+            if studio.isRecording && studio.recordingWriteDelayed {
+                Image(systemName: "hourglass")
+                    .foregroundStyle(.orange)
+                    .help(localization.text(.recordingWriteDelay))
+                    .accessibilityLabel(localization.text(.recordingWriteDelay))
+            }
+            if studio.isRecording, let seconds = studio.recordingSecondsRemaining {
+                Label(Duration.seconds(seconds).formatted(.time(pattern: .hourMinuteSecond)), systemImage: "externaldrive")
+                    .monospacedDigit()
+                    .help(localization.text(.recordingRemaining))
+                    .accessibilityLabel(localization.text(.recordingRemaining))
+            }
             if studio.isRecording && studio.recordingDroppedFrames > 0 {
                 Label("\(studio.recordingDroppedFrames)", systemImage: "exclamationmark.circle")
                     .foregroundStyle(.orange)

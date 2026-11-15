@@ -4,6 +4,9 @@
       "id": "ja",
       "name": "日本語",
       "translations": {
+        "takeIndexedFrame": "収録フレーム番号", "takeFrameIndexError": "補助データの索引を確認できません",
+        "restoreTakeScene": "Takeのシーンを復元", "takeAssetRestoreFailed": "Takeのアセットを復元できません", "restoreTakeCalibration": "Takeの校正を復元",
+        "recordingWriteDelay": "収録書き込み処理に遅延", "recordingRemaining": "保存先の空き容量から推定した収録可能時間",
         "recordingLowStorage": "収録先の空き容量不足", "recordingDrops": "収録処理で落とした映像フレーム数",
         "recordComposite10Bit": "10-bit合成映像とマイクを収録",
         "recordCamera10Bit": "10-bit入力を収録（HEVC）",
@@ -51,6 +54,9 @@
       "id": "en",
       "name": "English",
       "translations": {
+        "takeIndexedFrame": "Recorded frame number", "takeFrameIndexError": "Cannot verify auxiliary frame index",
+        "restoreTakeScene": "Restore take scene", "takeAssetRestoreFailed": "Cannot restore take asset", "restoreTakeCalibration": "Restore take calibration",
+        "recordingWriteDelay": "Recording write pipeline is delayed", "recordingRemaining": "Estimated recording time before storage protection",
         "recordingLowStorage": "Low recording storage", "recordingDrops": "Video frames dropped during recording",
         "recordComposite10Bit": "Record 10-bit composite and microphone",
         "recordCamera10Bit": "Record 10-bit input (HEVC)",
@@ -98,6 +104,9 @@
       "id": "zh-Hans",
       "name": "简体中文",
       "translations": {
+        "takeIndexedFrame": "录制帧编号", "takeFrameIndexError": "无法验证辅助帧索引",
+        "restoreTakeScene": "恢复Take场景", "takeAssetRestoreFailed": "无法恢复Take资源", "restoreTakeCalibration": "恢复Take校准",
+        "recordingWriteDelay": "录制写入流程延迟", "recordingRemaining": "按可用空间估算的剩余录制时间",
         "recordingLowStorage": "录制磁盘空间不足", "recordingDrops": "录制过程中丢弃的视频帧数",
         "recordComposite10Bit": "录制10位合成视频与麦克风",
         "recordCamera10Bit": "录制10位输入（HEVC）",

@@ -1,3 +1,4 @@
+import CoreMedia
 import Foundation
 import Observation
 
@@ -11,7 +12,7 @@ struct TakeReviewSnapshot: Sendable {
 
 /// File hashing runs on this actor, away from the UI and render threads.
 actor TakeReviewService {
-    enum PlaybackError: Error { case reviewChanged }
+    enum PlaybackError: Error { case reviewChanged, calibrationReferenceMismatch }
 
     func preparePlayback(directory: URL, manifest: TakeManifest, relativePath: String) throws -> URL {
         try Task.checkCancellation()
@@ -20,6 +21,56 @@ actor TakeReviewService {
         guard try TakeManifest.load(from: directory) == manifest else { throw PlaybackError.reviewChanged }
         return try manifest.verifiedPlaybackURL(relativePath: relativePath, in: directory)
     }
+    func restoreScene(directory: URL, manifest: TakeManifest, relativePath: String) throws -> StudioScene {
+        let scoped = directory.startAccessingSecurityScopedResource()
+        defer { if scoped { directory.stopAccessingSecurityScopedResource() } }
+        guard try TakeManifest.load(from: directory) == manifest else { throw PlaybackError.reviewChanged }
+        guard relativePath == "scene.vpx.json" else { throw TakeManifest.PlaybackError.unsupportedRole }
+        let data = try manifest.verifiedAssetData(relativePath: relativePath, role: .scene, in: directory)
+        let scene = try JSONDecoder().decode(TakeSceneSnapshot.self, from: data).restore()
+        try Task.checkCancellation()
+        return scene
+    }
+
+    func restoreCalibration(directory: URL, manifest: TakeManifest, relativePath: String) throws -> CalibrationProfile {
+        let scoped = directory.startAccessingSecurityScopedResource()
+        defer { if scoped { directory.stopAccessingSecurityScopedResource() } }
+        guard try TakeManifest.load(from: directory) == manifest else { throw PlaybackError.reviewChanged }
+        guard let reference = manifest.provenance?.calibration, reference.relativePath == relativePath else {
+            throw PlaybackError.calibrationReferenceMismatch
+        }
+        let data = try manifest.verifiedAssetData(relativePath: relativePath, role: .calibration, in: directory)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let profile = try decoder.decode(CalibrationProfile.self, from: data)
+        try profile.validate()
+        guard profile.id == reference.id, profile.revision == reference.revision, profile.cameraID == reference.cameraID else {
+            throw PlaybackError.calibrationReferenceMismatch
+        }
+        try Task.checkCancellation()
+        return profile
+    }
+
+    func loadFrameIndex(directory: URL, manifest: TakeManifest) throws -> [TakeAuxiliaryTracks.Row] {
+        let scoped = directory.startAccessingSecurityScopedResource()
+        defer { if scoped { directory.stopAccessingSecurityScopedResource() } }
+        guard try TakeManifest.load(from: directory) == manifest else { throw PlaybackError.reviewChanged }
+        let data = try manifest.verifiedAssetData(relativePath: "frames.jsonl", role: .pose, in: directory)
+        let decoder = JSONDecoder()
+        var rows: [TakeAuxiliaryTracks.Row] = []
+        var previous = CMTime.invalid
+        for line in data.split(separator: 0x0A) {
+            try Task.checkCancellation()
+            let row = try decoder.decode(TakeAuxiliaryTracks.Row.self, from: Data(line))
+            let time = CMTime(value: row.ptsValue, timescale: row.ptsTimescale)
+            guard row.frameIndex == rows.count, time.isNumeric, time >= .zero,
+                  !previous.isNumeric || time > previous else { throw StudioAssetError.invalid("Take frame index") }
+            rows.append(row)
+            previous = time
+        }
+        return rows
+    }
+
     func inspect(directory: URL) throws -> TakeReviewSnapshot {
         try Task.checkCancellation()
         let scoped = directory.startAccessingSecurityScopedResource()

@@ -26,7 +26,7 @@ final class LatestVideoFrameStore {
         }
     }
 
-    var recordingHealth: (lowStorage: Bool, dropped: Int)? {
+    var recordingHealth: CameraTakeRecorder.Health? {
         lock.withLock { recording?.recorder.health }
     }
 

@@ -34,12 +34,12 @@ struct TakeMatteCopy: @unchecked Sendable {
 
 /// Owned by the recorder's serial queue. One row per successfully written video sample.
 final class TakeAuxiliaryTracks {
-    struct Range: Codable {
+    struct Range: Codable, Sendable {
         let offset: UInt64
         let length: Int
     }
 
-    struct Depth: Codable {
+    struct Depth: Codable, Sendable {
         let width: UInt32
         let height: UInt32
         let sequence: UInt64
@@ -48,7 +48,7 @@ final class TakeAuxiliaryTracks {
         let confidence: Range
     }
 
-    struct Row: Codable {
+    struct Row: Codable, Sendable {
         let frameIndex: Int
         let ptsValue: Int64
         let ptsTimescale: Int32

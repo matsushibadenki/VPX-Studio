@@ -14,6 +14,8 @@ struct TakeReviewView: View {
     var initialDirectory: URL? = nil
     @State private var review = TakeReviewModel()
     @State private var playback = TakePlaybackModel()
+    @State private var assetRestoreTask: Task<Void, Never>?
+    @State private var assetRestoreError: String?
     @State private var selectedPlaybackPath: String?
     @Environment(\.dismiss) private var dismiss
 
@@ -28,6 +30,14 @@ struct TakeReviewView: View {
                 } label: { Image(systemName: "play.fill") }
                 .disabled(!canPlaySelection || review.isLoading || playback.isPreparing)
                 .help(localization.text(.playTakeAsset)).accessibilityLabel(localization.text(.playTakeAsset))
+                Button { restoreSelectedAsset() } label: { Image(systemName: "cube.transparent") }
+                    .disabled(!canRestoreSelection || assetRestoreTask != nil)
+                    .help(localization.text(.restoreTakeScene))
+                    .accessibilityLabel(localization.text(.restoreTakeScene))
+                Button { restoreSelectedAsset(calibration: true) } label: { Image(systemName: "camera.aperture") }
+                    .disabled(!canRestoreCalibration || assetRestoreTask != nil)
+                    .help(localization.text(.restoreTakeCalibration))
+                    .accessibilityLabel(localization.text(.restoreTakeCalibration))
                 Button { saveSnapshot() } label: { Image(systemName: "square.and.arrow.down") }
                     .disabled(review.isLoading)
                     .help(localization.text(.saveTakeSnapshot)).accessibilityLabel(localization.text(.saveTakeSnapshot))
@@ -43,6 +53,10 @@ struct TakeReviewView: View {
                         .help(localization.text(.stop)).accessibilityLabel(localization.text(.stop))
                 }
                 Button(localization.text(.close)) { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            if let assetRestoreError {
+                Label(localization.text(.takeAssetRestoreFailed), systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange).help(assetRestoreError)
             }
             if review.isLoading {
                 HStack { ProgressView().controlSize(.small); Text(localization.text(.takeChecking)) }
@@ -100,6 +114,23 @@ struct TakeReviewView: View {
                 }
                 if let player = playback.player {
                     VideoPlayer(player: player).frame(height: 240)
+                    if let row = playback.currentAuxiliaryFrame {
+                        HStack(spacing: 16) {
+                            Label(String(row.frameIndex + 1), systemImage: "film")
+                                .help(localization.text(.takeIndexedFrame))
+                            Label(auxiliaryDimensions(row.matteWidth, row.matteHeight), systemImage: "circle.lefthalf.filled")
+                                .help(localization.text(.mattePass))
+                            Label(auxiliaryDimensions(row.depth.map { Int($0.width) }, row.depth.map { Int($0.height) }),
+                                  systemImage: "square.3.layers.3d")
+                                .help(localization.text(.depthPass))
+                            Label(localization.text(PoseAlignmentTelemetry.Mode(rawValue: row.pose?.mode ?? "")?.localizationKey
+                                ?? .poseAlignmentUnavailable), systemImage: "move.3d")
+                                .help(localization.text(.poseAlignment))
+                        }.font(.caption).monospacedDigit()
+                    } else if playback.auxiliaryIndexFailed {
+                        Label(localization.text(.takeFrameIndexError), systemImage: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                 }
             } else {
                 ContentUnavailableView(localization.text(.openTake), systemImage: "folder")
@@ -109,8 +140,62 @@ struct TakeReviewView: View {
         .padding(16)
         .frame(width: 820, height: playback.player == nil ? 520 : 720)
         .onAppear { if let initialDirectory, review.directory == nil { review.open(initialDirectory) } }
-        .onDisappear { playback.stop(); review.cancel() }
-        .onChange(of: review.snapshot?.manifest.id) { _, _ in playback.stop(); selectedPlaybackPath = nil }
+        .onDisappear { assetRestoreTask?.cancel(); playback.stop(); review.cancel() }
+        .onChange(of: review.snapshot?.manifest.id) { _, _ in
+            assetRestoreTask?.cancel()
+            assetRestoreTask = nil
+            assetRestoreError = nil
+            playback.stop()
+            selectedPlaybackPath = nil
+        }
+    }
+
+    private func auxiliaryDimensions(_ width: Int?, _ height: Int?) -> String {
+        guard let width, let height else { return "—" }
+        return "\(width) × \(height)"
+    }
+
+    private var canRestoreSelection: Bool {
+        guard studio.canRestoreTakeScene, !review.isLoading, let snapshot = review.snapshot,
+              selectedPlaybackPath == "scene.vpx.json" else { return false }
+        return snapshot.manifest.assets.contains { $0.role == .scene && $0.relativePath == selectedPlaybackPath }
+            && snapshot.results.contains { $0.relativePath == selectedPlaybackPath && $0.status == .verified }
+    }
+
+    private var canRestoreCalibration: Bool {
+        guard studio.canRestoreTakeScene, !review.isLoading, let snapshot = review.snapshot,
+              let reference = snapshot.manifest.provenance?.calibration,
+              reference.cameraID == studio.selectedSourceID,
+              reference.relativePath == selectedPlaybackPath else { return false }
+        return snapshot.results.contains { $0.relativePath == reference.relativePath && $0.status == .verified }
+    }
+
+    private func restoreSelectedAsset(calibration: Bool = false) {
+        guard (calibration ? canRestoreCalibration : canRestoreSelection), let directory = review.directory, let snapshot = review.snapshot,
+              let path = selectedPlaybackPath else { return }
+        assetRestoreError = nil
+        assetRestoreTask = Task {
+            defer { if !Task.isCancelled { assetRestoreTask = nil } }
+            do {
+                let service = TakeReviewService()
+                if calibration {
+                    let profile = try await service.restoreCalibration(directory: directory,
+                        manifest: snapshot.manifest, relativePath: path)
+                    try Task.checkCancellation()
+                    guard review.snapshot?.manifest == snapshot.manifest, review.directory == directory else { return }
+                    try studio.restoreTakeCalibration(profile)
+                    dismiss()
+                } else {
+                    let scene = try await service.restoreScene(directory: directory,
+                        manifest: snapshot.manifest, relativePath: path)
+                    try Task.checkCancellation()
+                    guard review.snapshot?.manifest == snapshot.manifest, review.directory == directory else { return }
+                    if studio.restoreTakeScene(scene) { dismiss() }
+                }
+            } catch {
+                if !Task.isCancelled { assetRestoreError = String(describing: error) }
+            }
+        }
     }
 
     private var canPlaySelection: Bool {

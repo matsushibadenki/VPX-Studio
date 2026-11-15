@@ -3,7 +3,9 @@ import VPXCaptureProtocol
 import Observation
 
 enum LocalizationKey: String {
-    case recordingLowStorage, recordingDrops
+    case takeIndexedFrame, takeFrameIndexError
+    case restoreTakeScene, restoreTakeCalibration, takeAssetRestoreFailed
+    case recordingLowStorage, recordingDrops, recordingWriteDelay, recordingRemaining
     case recordComposite10Bit
     case recordCamera10Bit
     case recordCompositeAudio

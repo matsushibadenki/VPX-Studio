@@ -24,6 +24,11 @@ final class TakeSnapshotTests: XCTestCase {
         let review = try await TakeReviewService().inspect(directory: destination)
         XCTAssertTrue(review.allVerified)
         XCTAssertEqual(review.manifest.assets.map(\.role), [.diagnostics, .calibration])
+        let service = TakeReviewService()
+        let restored = try await service.restoreCalibration(directory: destination,
+            manifest: review.manifest, relativePath: "calibration.json")
+        XCTAssertEqual(restored, profile)
+        XCTAssertThrowsError(try studio.restoreTakeCalibration(restored))
         var invalid = request.manifest
         let provenance = try XCTUnwrap(invalid.provenance)
         invalid.provenance = .init(kind: provenance.kind, software: provenance.software, devices: provenance.devices,
@@ -34,6 +39,15 @@ final class TakeSnapshotTests: XCTestCase {
             XCTFail("Mismatched calibration reference")
         } catch TakeSnapshotWriter.WriteError.invalidSnapshot {}
         XCTAssertFalse(FileManager.default.fileExists(atPath: rejected.path))
+        invalid.assets = review.manifest.assets
+        try invalid.save(to: destination)
+        let mismatched = try TakeManifest.load(from: destination)
+        do {
+            _ = try await service.restoreCalibration(directory: destination,
+                manifest: mismatched, relativePath: "calibration.json")
+            XCTFail("A valid hash does not establish the calibration revision")
+        } catch TakeReviewService.PlaybackError.calibrationReferenceMismatch {}
+
     }
 
     @MainActor func testSnapshotPublishesSealedPackageAndCanBeReviewed() async throws {

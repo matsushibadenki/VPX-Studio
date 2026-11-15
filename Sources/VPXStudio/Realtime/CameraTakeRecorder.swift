@@ -12,6 +12,7 @@ final class CameraTakeRecorder: @unchecked Sendable {
         var width = 0
         var height = 0
         var pixelFormat: UInt32 = 0
+        var peakVideoWriteMilliseconds: Double?
         var encodedBitDepth: Int?
         var audioBuffers: Int?
         var audioDropped: Int?
@@ -34,25 +35,71 @@ final class CameraTakeRecorder: @unchecked Sendable {
     private var lastStorageCheck: UInt64 = 0
     private static let storageReserve: UInt64 = 256 * 1024 * 1024
 
-    var health: (lowStorage: Bool, dropped: Int) {
-        lock.withLock { (lowStorage, overflow + writerDrops) }
+    struct Health {
+        var lowStorage = false
+        var dropped = 0
+        var writeDelayed = false
+        var secondsRemaining: Int?
     }
 
-    private static func hasStorage(at directory: URL) -> Bool {
+    private var writeDelayed = false
+    private var delayScore = 0
+    private var secondsRemaining: Int?
+    private var previousStorageSample: (time: UInt64, bytes: UInt64)?
+    private var bytesPerSecond: Double?
+
+    var health: Health {
+        lock.withLock {
+            Health(lowStorage: lowStorage, dropped: overflow + writerDrops,
+                writeDelayed: writeDelayed, secondsRemaining: secondsRemaining)
+        }
+    }
+
+    private static func freeBytes(at directory: URL) -> UInt64? {
         guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: directory.path),
-              let bytes = attributes[.systemFreeSize] as? NSNumber else { return true }
-        return bytes.uint64Value >= storageReserve
+              let bytes = attributes[.systemFreeSize] as? NSNumber else { return nil }
+        return bytes.uint64Value
     }
 
     private func checkStorage() -> Bool {
         let now = DispatchTime.now().uptimeNanoseconds
         if now - lastStorageCheck >= 1_000_000_000 {
             lastStorageCheck = now
-            if !Self.hasStorage(at: staging) {
-                lock.withLock { lowStorage = true }
+            let files = [movieName, "matte.f16le", "depth.bin", "frames.jsonl"]
+            let bytes = files.reduce(UInt64(0)) { sum, file in
+                let path = staging.appendingPathComponent(file).path
+                let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber
+                return sum + (size?.uint64Value ?? 0)
+            }
+            if let previous = previousStorageSample, bytes > previous.bytes {
+                let rate = Double(bytes - previous.bytes) * 1e9 / Double(now - previous.time)
+                bytesPerSecond = bytesPerSecond.map { $0 * 0.75 + rate * 0.25 } ?? rate
+                previousStorageSample = (now, bytes)
+            } else if previousStorageSample == nil {
+                previousStorageSample = (now, bytes)
+            }
+            if let free = Self.freeBytes(at: staging) {
+                let reserve = max(Double(Self.storageReserve), (bytesPerSecond ?? 0) * 5)
+                let remaining = bytesPerSecond.map { min(86_400, max(0, (Double(free) - reserve) / $0)) }
+                lock.withLock {
+                    secondsRemaining = remaining.map { Int($0) }
+                    if Double(free) < reserve { lowStorage = true }
+                }
+            } else {
+                lock.withLock { secondsRemaining = nil }
             }
         }
         return !health.lowStorage
+    }
+
+    private func measureVideoWrite(since enqueued: UInt64) {
+        let milliseconds = Double(DispatchTime.now().uptimeNanoseconds - enqueued) / 1e6
+        stats.peakVideoWriteMilliseconds = max(stats.peakVideoWriteMilliseconds ?? 0, milliseconds)
+        delayScore = milliseconds >= 100 ? min(10, delayScore + 3) : max(0, delayScore - 1)
+        lock.withLock {
+            if delayScore >= 9 { writeDelayed = true }
+            else if delayScore == 0 { writeDelayed = false }
+        }
     }
 
     private func dropWriterFrame() {
@@ -81,13 +128,16 @@ final class CameraTakeRecorder: @unchecked Sendable {
     }
     private var movieName: String { composite ? "composite.mov" : "camera.mov" }
     private let auxiliaryTracks: TakeAuxiliaryTracks?
+    private let sceneSnapshot: TakeSceneSnapshot?
     private let request: TakeSnapshotRequest
     private let parent: URL
     private let scoped: Bool
     private let staging: URL
     private let destination: URL
 
-    init(request: TakeSnapshotRequest, parent: URL, sourceID: UUID, composite: Bool = false, preserve10Bit: Bool = false) throws {
+    init(request: TakeSnapshotRequest, parent: URL, sourceID: UUID, composite: Bool = false, preserve10Bit: Bool = false,
+         sceneSnapshot: TakeSceneSnapshot? = nil) throws {
+        self.sceneSnapshot = sceneSnapshot
         self.preserve10Bit = preserve10Bit
         self.composite = composite
         stats = Statistics(sourceID: sourceID)
@@ -99,7 +149,7 @@ final class CameraTakeRecorder: @unchecked Sendable {
         let didScope = parent.startAccessingSecurityScopedResource()
         do {
             guard !FileManager.default.fileExists(atPath: destination.path) else { throw Failure.destinationExists }
-            guard Self.hasStorage(at: parent) else { throw Failure.insufficientStorage }
+            if let free = Self.freeBytes(at: parent), free < Self.storageReserve { throw Failure.insufficientStorage }
             try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
         } catch {
             if didScope { parent.stopAccessingSecurityScopedResource() }
@@ -125,10 +175,12 @@ final class CameraTakeRecorder: @unchecked Sendable {
         lock.withLock {
             guard accepting, !failed, !lowStorage else { return }
             guard slots.wait(timeout: .now()) == .success else { overflow += 1; return }
+            let enqueued = DispatchTime.now().uptimeNanoseconds
             let sample = Sample(buffer: buffer, time: time, auxiliary: auxiliary, matte: matte)
             queue.async { [self] in
                 defer { slots.signal() }
                 guard failure == nil, checkStorage() else { return }
+                defer { measureVideoWrite(since: enqueued) }
                 do { try append(sample) }
                 catch {
                     failure = error
@@ -315,6 +367,11 @@ final class CameraTakeRecorder: @unchecked Sendable {
         manifest.provenance = .init(kind: .recording, software: provenance.software, devices: provenance.devices, calibration: provenance.calibration)
         manifest.assets += [.init(role: composite ? .composite : .camera, relativePath: movieName), .init(role: .diagnostics, relativePath: "recording.json")]
         manifest.assets += try auxiliaryTracks?.close() ?? []
+        if let sceneSnapshot {
+            let path = "scene.vpx.json"
+            try JSONEncoder().encode(sceneSnapshot).write(to: staging.appendingPathComponent(path))
+            manifest.assets.append(.init(role: .scene, relativePath: path))
+        }
         try manifest.sealAssets(in: staging)
         try manifest.save(to: staging)
         try FileManager.default.moveItem(at: staging, to: destination)

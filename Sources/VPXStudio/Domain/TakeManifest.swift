@@ -84,6 +84,23 @@ struct TakeManifest: Codable, Equatable, Sendable {
         return inspected.url
     }
 
+    func verifiedAssetData(relativePath: String, role: Asset.Role, in directory: URL) throws -> Data {
+        try validate()
+        guard let asset = assets.first(where: { $0.relativePath == relativePath && $0.role == role }) else { throw PlaybackError.unsupportedRole }
+        guard let expected = asset.sha256 else { throw PlaybackError.unverified }
+        let url = try Self.resolveAsset(asset, in: directory)
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var data = Data()
+        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
+            try Task.checkCancellation()
+            data.append(chunk)
+        }
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard digest == expected else { throw PlaybackError.modified }
+        return data
+    }
+
     /// Call off the realtime/UI thread after recording has closed its files.
     /// The manifest is updated only if every asset can be hashed successfully.
     mutating func sealAssets(in directory: URL) throws {
@@ -120,7 +137,7 @@ struct TakeManifest: Codable, Equatable, Sendable {
         try inspectAsset(asset, in: directory).digest
     }
 
-    private static func inspectAsset(_ asset: Asset, in directory: URL) throws -> (digest: String, url: URL) {
+    private static func resolveAsset(_ asset: Asset, in directory: URL) throws -> URL {
         try Task.checkCancellation()
         let root = directory.resolvingSymlinksInPath().standardizedFileURL
         let url = root.appendingPathComponent(asset.relativePath).resolvingSymlinksInPath().standardizedFileURL
@@ -129,6 +146,11 @@ struct TakeManifest: Codable, Equatable, Sendable {
         }
         let values = try url.resourceValues(forKeys: [.isRegularFileKey])
         guard values.isRegularFile == true else { throw ValidationError.unsafeAsset(asset.relativePath) }
+        return url
+    }
+
+    private static func inspectAsset(_ asset: Asset, in directory: URL) throws -> (digest: String, url: URL) {
+        let url = try resolveAsset(asset, in: directory)
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
