@@ -51,6 +51,7 @@ public final class CaptureNodeSessionModel {
     public var enableTracking = IPhoneCaptureCoordinator.supportsTracking
     public var enableDepth = IPhoneCaptureCoordinator.supportsDepth
     public var supportsDepth: Bool { IPhoneCaptureCoordinator.supportsDepth && enableTracking }
+    public var usesExternalInput: Bool { externalCapabilities != nil }
     public var configurationLocked: Bool { channel != nil }
     public private(set) var telemetryReady = false
     public private(set) var requestingCamera = false
@@ -58,6 +59,13 @@ public final class CaptureNodeSessionModel {
 
     private let nodeID: UUID
     private let displayName: String
+    private var submittedExternalHEVC = false
+    private var externalVideoInput: ExternalVideoInput?
+    private let externalCapabilities: Set<CaptureNodeCapability>?
+    public private(set) var externalCaptureID: UUID?
+    /// Notify the native producer to force a new HEVC key frame.
+    public var onExternalKeyFrameRequested: (() -> Void)?
+
     private let coordinator = IPhoneCaptureCoordinator()
     private let discovery = CaptureNodeHostDiscovery()
     private let networkQueue = DispatchQueue(label: "com.vpxstudio.capture-node")
@@ -112,7 +120,9 @@ public final class CaptureNodeSessionModel {
             batteryState: battery, thermalState: thermal, isCapturing: isCapturing))
     }
 
-    public init(nodeID: UUID = UUID(), displayName: String = UIDevice.current.name) {
+    public init(nodeID: UUID = UUID(), displayName: String = UIDevice.current.name,
+                externalCapabilities: Set<CaptureNodeCapability>? = nil) {
+        self.externalCapabilities = externalCapabilities?.union([.video, .timeSync])
         self.nodeID = nodeID
         self.displayName = displayName
         discovery.onHostsChanged = { [weak self] hosts in
@@ -216,7 +226,7 @@ public final class CaptureNodeSessionModel {
                 Task { @MainActor [weak self, weak channel] in
                     guard let self, let channel, self.channel === channel else { return }
                     do {
-                        if command.action == .resumeMedia { coordinator.requestVideoKeyFrame() }
+                        if command.action == .resumeMedia { requestVideoKeyFrame() }
                         try transport.applyMediaCommand(command)
                     } catch { fail(error) }
                 }
@@ -226,7 +236,7 @@ public final class CaptureNodeSessionModel {
                let command=try? envelope.decodePayload(CaptureNodeControlCommand.self), command.action == .requestKeyFrame {
                 Task { @MainActor [weak self, weak channel] in
                     guard let self, let channel, self.channel === channel else { return }
-                    coordinator.requestVideoKeyFrame()
+                    requestVideoKeyFrame()
                 }
                 return
             }
@@ -257,6 +267,13 @@ public final class CaptureNodeSessionModel {
             return
         }
         guard !requestingCamera, !isCapturing else { return }
+        if externalCapabilities != nil {
+            externalCaptureID = UUID()
+            isCapturing = true
+            status = .capturing
+            requestVideoKeyFrame()
+            return
+        }
         let generation=UUID(); captureGeneration=generation; requestingCamera=true
         Task { @MainActor [weak self] in
             let granted = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
@@ -272,10 +289,66 @@ public final class CaptureNodeSessionModel {
         }
     }
 
+    private func requestVideoKeyFrame() {
+        if externalCapabilities != nil {
+            externalVideoInput?.requestKeyFrame()
+            onExternalKeyFrameRequested?()
+        }
+        else { coordinator.requestVideoKeyFrame() }
+    }
+
+    /// Creates a bounded VideoToolbox input for native frames in this capture.
+    /// Use either this input or submitExternalVideo for the capture's sequence.
+    public func makeExternalVideoInput(profile: CaptureVideoProfile = .uhd60HEVC) throws -> ExternalVideoInput {
+        guard externalCaptureID != nil, !submittedExternalHEVC else { throw CaptureNodeSessionError.notConnected }
+        if let externalVideoInput { return externalVideoInput }
+        let transport = self.transport
+        let captureID = externalCaptureID
+        let input = try ExternalVideoInput(profile: profile, send: { frame in
+            try transport.sendVideo(frame)
+        }, onError: { [weak self] error in
+            Task { @MainActor [weak self] in
+                guard let self, externalCaptureID == captureID else { return }
+                fail(error)
+            }
+        })
+        externalVideoInput = input
+        return input
+    }
+
+    /// Submit length-prefixed HEVC from the native producer using the device
+    /// monotonic clock. The ID is invalidated on stop or loss of connection.
+    public func submitExternalVideo(_ frame: CaptureEncodedVideoFrame, captureID: UUID) throws {
+        guard externalCaptureID == captureID, externalVideoInput == nil else { return }
+        submittedExternalHEVC = true
+        try transport.sendVideo(frame)
+    }
+
+    public func submitExternalPose(_ pose: CapturePosePacket, captureID: UUID) {
+        guard externalCaptureID == captureID, externalCapabilities?.contains(.pose) == true else { return }
+        transport.sendPose(pose)
+    }
+
+    public func submitExternalDepth(_ depth: CaptureDepthPacket, captureID: UUID) throws {
+        guard externalCaptureID == captureID, externalCapabilities?.contains(.depth) == true else { return }
+        try transport.sendDepth(depth)
+    }
+
+    public func submitExternalQuality(_ event: CaptureQualityEvent, captureID: UUID) throws {
+        guard externalCaptureID == captureID, externalCapabilities?.contains(.pose) == true else { return }
+        try transport.sendQuality(event)
+    }
+
     public func stopCapture() {
         captureGeneration=UUID(); requestingCamera=false
-        coordinator.stop()
-        coordinator.stopHEVCEncoding()
+        submittedExternalHEVC = false
+        externalVideoInput?.stop()
+        externalVideoInput = nil
+        externalCaptureID = nil
+        if externalCapabilities == nil {
+            coordinator.stop()
+            coordinator.stopHEVCEncoding()
+        }
         isCapturing = false
         status = channel == nil ? .idle : .connected
     }
@@ -331,6 +404,7 @@ public final class CaptureNodeSessionModel {
         status = .failed(error.localizedDescription)
     }
     private var capabilities: Set<CaptureNodeCapability> {
+        if let externalCapabilities { return externalCapabilities }
         var result: Set<CaptureNodeCapability> = [.video, .timeSync, .lensMetadata]
         if enableTracking && IPhoneCaptureCoordinator.supportsTracking {
             result.insert(.pose)
@@ -370,8 +444,10 @@ private enum CaptureNodeSessionError: LocalizedError {
 public struct CaptureNodeControlView: View {
     @Bindable private var model: CaptureNodeSessionModel
     @State private var showsScanner = false
+    private let stopOnDisappear: Bool
 
-    public init(model: CaptureNodeSessionModel) {
+    public init(model: CaptureNodeSessionModel, stopOnDisappear: Bool = true) {
+        self.stopOnDisappear = stopOnDisappear
         _model = Bindable(model)
     }
 
@@ -393,7 +469,7 @@ public struct CaptureNodeControlView: View {
                 model.applyPairingPayload(payload)
             }
         }
-        .onDisappear { model.stop() }
+        .onDisappear { if stopOnDisappear { model.stop() } }
     }
 
     private var header: some View {
@@ -473,9 +549,11 @@ public struct CaptureNodeControlView: View {
 
     private var captureCard: some View {
         card(title: text(.capture)) {
-            Toggle(text(.tracking), isOn: $model.enableTracking)
-                .disabled(model.configurationLocked || !IPhoneCaptureCoordinator.supportsTracking)
-            Toggle(text(.depth), isOn: $model.enableDepth).disabled(model.configurationLocked || !model.supportsDepth)
+            if !model.usesExternalInput {
+                Toggle(text(.tracking), isOn: $model.enableTracking)
+                    .disabled(model.configurationLocked || !IPhoneCaptureCoordinator.supportsTracking)
+                Toggle(text(.depth), isOn: $model.enableDepth).disabled(model.configurationLocked || !model.supportsDepth)
+            }
             Button(model.isCapturing ? text(.stopCapture) : text(.startCapture)) {
                 model.isCapturing ? model.stopCapture() : model.startCapture()
             }

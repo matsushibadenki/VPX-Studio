@@ -52,3 +52,22 @@ Macのモニターには受付上限と拒否理由を表示し、診断JSONの`
 自動テストは状態の失効、逆順・重複、同期喪失、不正値、未来時刻、Node間独立性、再接続後のシーケンスリセット、暗号化UDPの1200バイト上限と往復、診断スナップショットの往復を検証する。
 
 ⭕️ [Pending] 2〜4台の実iPhoneによる充電状態・OS温度負荷の変化、Wi-Fi断線と再接続、選択外Nodeのデコード時間、ライト／ダークでの表示を確認する。送信品質の自動変更や熱保護の制御は本機能に含まず、ROADMAPのNextを継続する。
+
+
+## Universal Film Camera接続口
+
+CameraのiOSネイティブ層からSwift Packageの `VPXIPhoneCapture` と `VPXCaptureProtocol` を利用する。MainActorで `CaptureNodeSessionModel(externalCapabilities: ...)` を生成し、実際に送れる `pose`・`depth` などだけを宣言する。外部モードではVPX側が撮影セッションを起動しない。Camera側がカメラ、センサー、エンコーダを所有する。
+
+既存の発見・ペアリング・ホスト選択を使い、テレメトリ準備後に `startCapture()` を呼ぶ。生成された `externalCaptureID` をネイティブ側の送信処理に渡す。`submitExternalVideo` にはホストとの時計同期に使う端末単調時計で時刻を付けた、長さ付きNALのHEVCを渡す。キーフレームにはパラメータセットを付ける。`onExternalKeyFrameRequested` は送信開始、ホストからの要求、送信再開で呼ばれる。
+
+同じIDで `submitExternalPose`・`submitExternalDepth`・`submitExternalQuality` を利用できる。停止・切断後の旧IDは無視する。UIへの公開は接続状態と操作に限定し、映像・センサーの送信処理はネイティブ側で接続する。Universal Film Camera iOSでは撮影設定の「VPX Studioに接続」から利用する。実機間の試験項目はROADMAPを参照。
+
+
+Cameraが未圧縮のCVPixelBufferを渡す場合は、送信開始後に `makeExternalVideoInput(profile:)` を呼ぶ。返された入力口に撮影コールバックから `submit(_:hostTimeNanoseconds:metadata:)` で読み取り専用のバッファを渡す。端末の単調時計に変換した取得時刻を指定する。処理枠が埋まった場合や停止後は `false` を返す。入力口は停止・切断で無効化されるため、再接続時に作り直す。自前で圧縮したストリームを渡す場合は、同じ収録中に両方式を混在させず `submitExternalVideo` を使用する。
+
+AVCaptureからは `submit(_:synchronizationClock:cameraID:metadata:)` に撮影サンプルとセッションの `synchronizationClock` を渡せる。APIは取得時刻をホスト時計に変換し、明示メタデータがない場合はバッファの色域・伝達特性・YCbCr行列の添付情報を使う。戻り値はキューへの受付結果。
+
+
+CameraとVPX Studioは同じLANに接続する。MacのVPX Studioでペアリングを開始し、Cameraの撮影設定から「VPX Studioに接続」を開く。ホストを発見し、MacのQRを読み取り、確認コードを照合して接続する。送信開始後はシートを閉じて撮影画面に戻るとCameraのプレビューが再開し、その撮影サンプルがVPXへ送られる。送信を止める場合は接続画面を開き、停止を選ぶ。Cameraのバックグラウンド移行でも送信を終了する。
+
+CameraのiOSビルドはiOS 18以上を対象とする。開発時はXcodeプロジェクトのローカルパッケージ参照先にVPX-Studioを置く。同梱した送信機能は映像を提供し、CameraからのPose・深度の送信実装はNext。

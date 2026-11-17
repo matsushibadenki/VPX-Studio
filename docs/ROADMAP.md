@@ -249,8 +249,12 @@ iPhoneを、映像カメラ、トラッキング端末、IMU、対応機種の�
 
 連携先は [Universal Film CameraのROADMAP](../../../Tauri/Camera/docs/ROADMAP.md)。CameraはiPhoneの撮影、ネイティブ映像取得、エンコード、Film ProfileとLUTを担当する。VPX StudioはMac側の受信、時刻同期、センサー融合、校正、Metal合成、Take収録を担当する。CameraのTauri 2／Rust・wgpu経路に映像とGPUリソースを保持し、WebViewには操作・状態・計測値のみを渡す。
 
-- 🟠 [Next] 最初の相互接続として、Camera iOSにVPX送信モードを追加する。Cameraのネイティブ撮影セッションから映像を分岐し、既存VPX Capture Nodeプロトコル（現行v4）のBonjour発見、QR認証、時刻同期、HEVC映像、状態通知、キーフレーム要求を実装する。Wi-FiでMacに1台接続し、入力選択・プレビュー・切断復旧まで通す。必要に応じてBLEを初回発見の補助として後から追加する。
-- 🟠 [Next] Swift側のプロトコル実装を基準に、CameraのAppleネイティブ層から利用する方法とRust実装を比較し、接続方式を決める。暗号化フレーミング、能力交渉、切断、古いパケット、互換性を両プロジェクトで同じテストベクトルとループバック試験で検証する。CameraのNearby Peer Transferは撮影済みファイルの交換に使用し、ライブ送信契約はVPX側で管理する。
+- 🟢 [Done] VPXのiOSクライアントに外部ネイティブ入力モードを追加。既存の認証・時計同期・送信制御を再利用し、Camera側のHEVC、Pose、深度、追跡品質を受け取るAPIを用意した。開始・再開時のキーフレーム要求と旧収録IDの無効化に対応する。Camera側の呼出し実装は次項。
+- 🟢 [Done] CameraのAppleネイティブ層から取得済みのCVPixelBufferをVPXへ渡す入力口を追加。既存のVideoToolboxエンコーダを使い、3フレームの処理枠、単調時刻の検査、キーフレーム要求、切断後の出力無効化を実装した。Camera側の撮影セッションを再利用する。
+- 🟢 [Done] Cameraのネイティブ撮影コールバックからCMSampleBufferを受け取るAPIを追加。撮影時刻を端末ホスト時計へ変換し、色の添付情報を引き継ぐ。無効・重複・逆順の時刻はエンコード前に拒否する。
+- 🟢 [Done] Camera iOSの撮影設定からVPX接続画面を開き、既存AVCaptureセッションの映像サンプルと同期時計をSwift Packageへ渡す。Bonjour発見、QRペアリング、HEVC送信、キーフレーム要求を共有し、映像はWebViewを経由しない。CameraのiOS最低要件は共有パッケージに合わせて18.0。
+- 🟢 [Done] CameraのAppleネイティブ層でVPXのSwift実装を使用する。CameraのNearby Peer Transferは撮影済みファイルの交換に使用する。
+- ⭕️ [Pending] Camera iOSとMacの実機で、1台の映像入力選択・プレビュー・収録・切断後の再ペアリングを通す。初回発見のBLE補助は必要に応じて後から追加する。
 - 🟠 [Next] Core Motionの姿勢・角速度を最初のセンサー入力とし、ARKitの6DoF位置・姿勢、対応iPhoneのLiDAR深度とconfidence、撮影時の内部パラメータ・レンズ状態を能力ごとに追加する。Core Motion単独では位置を提供しない。ARKitと既存撮影セッションの同時利用可否を確認し、カメラ所有者を1つに固定する。必要に応じて追跡対応の撮影モードを設ける。
 - 🟠 [Next] 映像と各センサー値に取得時刻・シーケンス・座標系・品質を付ける。時計変換、不確かさ、iPhoneとカメラ間の外部校正をVPXで管理し、姿勢欠損、再ローカライズ、同期切れ、深度の鮮度をNode別に表示する。Takeに校正参照、同期状態、欠損、使用した入力を記録する。
 - 🟠 [Next] CameraのFilm Profile／LUT適用有無と色空間・伝達特性・レンジを伝える。初期接続ではVPX合成用の映像経路を優先し、10-bit・HDRや焼き込み済み映像は能力交渉と色再現の確認後に追加する。
