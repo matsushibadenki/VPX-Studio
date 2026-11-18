@@ -25,6 +25,7 @@ struct NodeVideoMonitoring: Codable, Sendable {
     var captured: Double?
     var decoded: Double?
     var decodeMilliseconds: Double?
+    var lensFrame: NodeLensFrame?
     func captureAgeMilliseconds(now: Double) -> Double? {
         guard let captured, now >= captured else { return nil }
         return (now - captured) * 1_000
@@ -45,5 +46,22 @@ struct NodeMonitoringSnapshot: Codable, Identifiable {
     let jitterMilliseconds: Double?
     let trackingReason: String?
     let status: CaptureNodeStatus?
+    var lensFrame: NodeLensFrame?
+    var motion: NodeMotionSnapshot?
     var mediaControl: NodeMediaControl?
+}
+
+
+struct NodeMotionSnapshot: Codable {
+    let sample: CaptureMotionSample
+    let capturedHostNanoseconds: Double
+    var videoOffsetMilliseconds: Double?
+}
+
+
+struct NodeLensFrame: Codable, Sendable {
+    let sequence: UInt64
+    let captureNodeNanoseconds: UInt64
+    let captureHostSeconds: Double
+    let metadata: CaptureCameraMetadata
 }

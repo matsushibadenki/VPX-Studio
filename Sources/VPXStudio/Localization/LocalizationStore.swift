@@ -3,6 +3,7 @@ import VPXCaptureProtocol
 import Observation
 
 enum LocalizationKey: String {
+    case calibrationLensMetadataUnavailable, calibrationCapturedLensMismatch
     case takeIndexedFrame, takeFrameIndexError
     case restoreTakeScene, restoreTakeCalibration, takeAssetRestoreFailed
     case recordingLowStorage, recordingDrops, recordingWriteDelay, recordingRemaining
@@ -20,6 +21,7 @@ enum LocalizationKey: String {
     case nodeMonitor, nodeFrameAge, nodeBattery, nodeThermal, nodeCapture, nodeSending, nodeIdle
     case nodeThermalNominal, nodeThermalFair, nodeThermalSerious, nodeThermalCritical
     case calibrationLensMismatch
+    case calibrationExtrinsicsMissing, checkerboardIntrinsicRMSE, checkerboardViewCount
     case checkerboardIntrinsicsExpired
     case solveCheckerboard, checkerboardHelp, checkerboardSolving, checkerboardInvalid, checkerboardIntrinsicsMismatch, checkerboardDegenerate, checkerboardResidualRejected, checkerboardMaximumResidual, checkerboardMeasured
     case depthPass, depthConfidencePass, depthPreviewHelp, depthPreviewFar, depthPreviewMissing, depthPreviewAge

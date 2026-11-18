@@ -1,5 +1,19 @@
 import Foundation
 
+public struct CaptureLensMetadata: Codable, Sendable, Equatable {
+    public let model: String?
+    public let focalLengthMillimeters: Double?
+    public let fNumber: Double?
+    public let digitalZoomRatio: Double?
+
+    public init(model: String?, focalLengthMillimeters: Double?, fNumber: Double?, digitalZoomRatio: Double?) {
+        self.model = model
+        self.focalLengthMillimeters = focalLengthMillimeters
+        self.fNumber = fNumber
+        self.digitalZoomRatio = digitalZoomRatio
+    }
+}
+
 public struct CaptureCameraMetadata: Codable, Sendable, Equatable {
     public let cameraID: String
     public let source: String
@@ -8,9 +22,10 @@ public struct CaptureCameraMetadata: Codable, Sendable, Equatable {
     public let yCbCrMatrix: String?
     public let intrinsics: [Float]?
     public let exposureSeconds: Double?
-    public init(cameraID: String, source: String, colorPrimaries: String?, transferFunction: String?, yCbCrMatrix: String?, intrinsics: [Float]? = nil, exposureSeconds: Double? = nil) {
+    public let lens: CaptureLensMetadata?
+    public init(cameraID: String, source: String, colorPrimaries: String?, transferFunction: String?, yCbCrMatrix: String?, intrinsics: [Float]? = nil, exposureSeconds: Double? = nil, lens: CaptureLensMetadata? = nil) {
         self.cameraID=cameraID; self.source=source; self.colorPrimaries=colorPrimaries; self.transferFunction=transferFunction
-        self.yCbCrMatrix=yCbCrMatrix; self.intrinsics=intrinsics; self.exposureSeconds=exposureSeconds
+        self.yCbCrMatrix=yCbCrMatrix; self.intrinsics=intrinsics; self.exposureSeconds=exposureSeconds; self.lens=lens
     }
 }
 
@@ -53,8 +68,27 @@ public struct CaptureTelemetryOffer: Codable, Sendable {
     public init(connectionID: UUID, port: UInt16) { self.connectionID=connectionID; self.port=port }
 }
 
+public struct CaptureMotionSample: Codable, Sendable, Equatable {
+    public let captureTimeNanoseconds: UInt64
+    public let attitudeQuaternion: [Double]
+    public let angularVelocityRadiansPerSecond: [Double]
+
+    public init(captureTimeNanoseconds: UInt64, attitudeQuaternion: [Double], angularVelocityRadiansPerSecond: [Double]) {
+        self.captureTimeNanoseconds = captureTimeNanoseconds
+        self.attitudeQuaternion = attitudeQuaternion
+        self.angularVelocityRadiansPerSecond = angularVelocityRadiansPerSecond
+    }
+
+    public var isValid: Bool {
+        captureTimeNanoseconds > 0 && attitudeQuaternion.count == 4 &&
+            abs(attitudeQuaternion.reduce(0) { $0 + $1 * $1 } - 1) < 0.01 &&
+            angularVelocityRadiansPerSecond.count == 3 && angularVelocityRadiansPerSecond.allSatisfy(\.isFinite)
+    }
+}
+
 public enum CaptureTelemetryPayload: Codable, Sendable, Equatable {
     case nodeStatus(CaptureNodeStatus)
+    case motion(CaptureMotionSample)
     case pose(CapturePosePacket)
     case diagnostic(CaptureQualityEvent)
 }

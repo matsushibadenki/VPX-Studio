@@ -173,7 +173,11 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
         defer { bufferLock.unlock() }
         guard !stopped, !mediaSuspended, telemetry.sourceGeneration == mediaGeneration else { return }
         monitoring = NodeVideoMonitoring(captured: captured, decoded: telemetry.decodeCompleted,
-            decodeMilliseconds: FrameTelemetry.milliseconds(from: telemetry.decodeStarted, to: telemetry.decodeCompleted))
+            decodeMilliseconds: FrameTelemetry.milliseconds(from: telemetry.decodeStarted, to: telemetry.decodeCompleted),
+            lensFrame: header.cameraMetadata.map {
+                NodeLensFrame(sequence: header.sequence, captureNodeNanoseconds: header.captureTimeNanoseconds,
+                    captureHostSeconds: captured, metadata: $0)
+            })
         onFrame?(
             VideoFrame(
                 identifier: header.sequence,
@@ -184,7 +188,7 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
                 } ?? VideoColorMetadata.read(from: pixelBuffer),
                 pixelBuffer: pixelBuffer,
                 quality: .nominal,
-                telemetry: telemetry
+                telemetry: telemetry, capturedLens: header.cameraMetadata?.lens
             )
         )
     }

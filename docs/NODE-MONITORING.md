@@ -13,7 +13,7 @@ MacのヘッダーにあるネットワークアイコンからNodeモニター�
 
 ## 伝送と鮮度
 
-HostとiPhoneはCaptureプロトコル版4に揃える。異なる版のHelloは拒否する。既存のペアリング情報は変更しない。
+HostとiPhoneはCaptureプロトコル版5に揃える。異なる版のHelloは拒否する。既存のペアリング情報は変更しない。
 
 iPhoneは接続中のみバッテリー監視を有効化し、状態を毎秒、既存のAES-GCM保護UDPチャネルへ送る。停止・切断時にタスクを取り消し、以前のバッテリー監視設定を復元する。映像停止後も接続が続く間は端末状態を送信する。
 
@@ -70,4 +70,13 @@ AVCaptureからは `submit(_:synchronizationClock:cameraID:metadata:)` に撮影
 
 CameraとVPX Studioは同じLANに接続する。MacのVPX Studioでペアリングを開始し、Cameraの撮影設定から「VPX Studioに接続」を開く。ホストを発見し、MacのQRを読み取り、確認コードを照合して接続する。送信開始後はシートを閉じて撮影画面に戻るとCameraのプレビューが再開し、その撮影サンプルがVPXへ送られる。送信を止める場合は接続画面を開き、停止を選ぶ。Cameraのバックグラウンド移行でも送信を終了する。
 
-CameraのiOSビルドはiOS 18以上を対象とする。開発時はXcodeプロジェクトのローカルパッケージ参照先にVPX-Studioを置く。同梱した送信機能は映像を提供し、CameraからのPose・深度の送信実装はNext。
+CameraのiOSビルドはiOS 18以上を対象とする。開発時はXcodeプロジェクトのローカルパッケージ参照先にVPX-Studioを置く。
+
+
+Cameraの映像送信中は、対応端末でCore Motionの姿勢と角速度を約30 Hzで送る。姿勢の成分順は x・y・z・w で、基準は `xArbitraryZVertical`。角速度は端末軸の rad/s。Core Motionの取得時刻をナノ秒へ変換し、映像と同様にMacの同期時計へ写す。診断JSONの `nodeMonitoring[].motion` に最新の有効サンプル、Mac時計上の取得時刻と、直近の映像取得時刻との差を記録する。サンプルが古い場合は省略する。
+
+
+Cameraの撮影設定で「ARKit追跡でVPX Studioに接続」を選ぶと、接続画面を開いたままARKitから送信する。Cameraの通常プレビューは停止し、接続画面を閉じるとARKit送信も終了する。映像・6DoF Pose・内部パラメータ・LiDAR深度と信頼度は同じARFrameの時刻とシーケンスを使用する。深度は対応端末で有効化し、信頼度付きのサンプルを最大5 Hzで送る。LiDAR非搭載端末は対応するARKit映像とPoseを送る。
+
+
+ARKit追跡モードでは、各フレームからEXIFのレンズ名・焦点距離（mm）・F値・デジタルズーム比・露光時間（秒）を読み取る。取得できた項目を映像ヘッダーに載せる。同一ARFrameの映像・Pose・深度はシーケンスと端末取得時刻を共有する。Macの診断JSONでは `nodeMonitoring[].lensFrame` に直近の復号済み映像の端末取得時刻、Mac時計上の取得時刻、メタデータを記録する。機種・条件によって欠けるEXIF項目は省略する。フォーカス位置とAF駆動状態は取得対象外。

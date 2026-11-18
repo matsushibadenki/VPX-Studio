@@ -1,5 +1,6 @@
 #if os(iOS)
-@preconcurrency import ARKit
+@preconcurrency import ImageIO
+import ARKit
 import CoreMotion
 import AVFoundation
 import Foundation
@@ -169,6 +170,20 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
         onPose?(pose)
 
         let image = frame.capturedImage
+        let exif = frame.exifData
+        let nestedExif = exif[kCGImagePropertyExifDictionary as String] as? [String: Any]
+        func exifValue(_ key: CFString) -> Any? { nestedExif?[key as String] ?? exif[key as String] }
+        func positive(_ key: CFString) -> Double? {
+            guard let number = exifValue(key) as? NSNumber else { return nil }
+            let value = number.doubleValue
+            return value.isFinite && value > 0 ? value : nil
+        }
+        let model = (exifValue(kCGImagePropertyExifLensModel) as? String).map { String($0.prefix(128)) }
+        let focalLength = positive(kCGImagePropertyExifFocalLength)
+        let fNumber = positive(kCGImagePropertyExifFNumber)
+        let zoom = positive(kCGImagePropertyExifDigitalZoomRatio)
+        let lens = model == nil && focalLength == nil && fNumber == nil && zoom == nil ? nil :
+            CaptureLensMetadata(model: model, focalLengthMillimeters: focalLength, fNumber: fNumber, digitalZoomRatio: zoom)
         let header = CaptureVideoFrameHeader(
             sequence: frameSequence,
             captureTimeNanoseconds: timestamp,
@@ -177,7 +192,8 @@ extension IPhoneCaptureCoordinator: ARSessionDelegate {
             codec: "raw-cv-pixel-buffer",
             isKeyFrame: true,
             cameraMetadata: IPhoneVideoCapture.metadata(image, cameraID: "arkit.back", source: "arkit",
-                intrinsics: (0..<3).flatMap { column in (0..<3).map { frame.camera.intrinsics[column][$0] } })
+                intrinsics: (0..<3).flatMap { column in (0..<3).map { frame.camera.intrinsics[column][$0] } },
+                exposure: positive(kCGImagePropertyExifExposureTime), lens: lens)
         )
         onVideoSample?(CaptureVideoSample(header: header, pixelBuffer: image))
         do {

@@ -17,9 +17,21 @@ struct CheckerboardObservation: Codable, Sendable {
     var measuredAt: Date
     var expiresAt: Date
     var focusDistanceMeters: Float?
+    var aprilTag36h11ID: Int?
+    var intrinsicsReference: IntrinsicsReference?
+
+    struct IntrinsicsReference: Codable, Sendable {
+        let id: UUID
+        let revision: Int
+    }
+
+    static func validTarget(columns: Int, rows: Int, tagID: Int?) -> Bool {
+        if let tagID { return columns == 2 && rows == 2 && (0..<587).contains(tagID) }
+        return (3...20).contains(columns) && (3...20).contains(rows)
+    }
 
     func validate(now: Date) throws {
-        guard schemaVersion == 1, (3...20).contains(columns), (3...20).contains(rows),
+        guard schemaVersion == 1, Self.validTarget(columns: columns, rows: rows, tagID: aprilTag36h11ID),
               imageWidth > 0, imageWidth <= 16384, imageHeight > 0, imageHeight <= 16384,
               squareSizeMeters.isFinite, (0.001...1).contains(squareSizeMeters),
               Double(max(columns,rows)-1)*squareSizeMeters <= 10,
@@ -79,6 +91,34 @@ enum CheckerboardError: Error {
     }
 }
 
+struct CheckerboardIntrinsicsMeasurement: Codable, Equatable, Sendable {
+    let method: String
+    let columns: Int
+    let rows: Int
+    let squareSizeMeters: Double
+    let viewRMSEPixels: [Double]
+    let maximumResidualPixels: Double
+    let reprojectionRMSEPixels: Double
+
+    func validate() throws {
+        guard method == "checkerboard-multiview-v1",
+              (3...20).contains(columns), (3...20).contains(rows),
+              (0.001...1).contains(squareSizeMeters),
+              Double(max(columns, rows) - 1) * squareSizeMeters <= 10,
+              (6...40).contains(viewRMSEPixels.count),
+              viewRMSEPixels.allSatisfy({ (0...2).contains($0) }),
+              (0...2).contains(reprojectionRMSEPixels),
+              (reprojectionRMSEPixels...5).contains(maximumResidualPixels) else {
+            throw StudioAssetError.invalid("checkerboard intrinsics measurement")
+        }
+        let combined = sqrt(viewRMSEPixels.reduce(0) { $0 + $1 * $1 } / Double(viewRMSEPixels.count))
+        guard abs(combined - reprojectionRMSEPixels) < 0.001,
+              viewRMSEPixels.allSatisfy({ $0 <= maximumResidualPixels + 0.001 }) else {
+            throw StudioAssetError.invalid("checkerboard intrinsics residuals")
+        }
+    }
+}
+
 struct CheckerboardMeasurement: Codable, Equatable, Sendable {
     let method: String
     let columns: Int
@@ -89,6 +129,7 @@ struct CheckerboardMeasurement: Codable, Equatable, Sendable {
     let stageFromBoard: [Float]
     let imagePoints: [CheckerboardObservation.Point]
     let focusDistanceMeters: Float?
+    var aprilTag36h11ID: Int?
 }
 
 struct CheckerboardSolution: Sendable {
@@ -171,6 +212,9 @@ enum CheckerboardSolver {
             }
             if !improved || delta.reduce(0,{ $0+$1*$1 }) < 1e-16 { break }
         }
+        if observation.intrinsicsReference != nil || observation.aprilTag36h11ID != nil {
+            guard simd_dot(pose.rotation[2], pose.translation) < 0 else { throw CheckerboardError.degenerate }
+        }
         let errors = try residuals(pose,objects: objects,observed: observation.imagePoints,camera: projection)
         let rmse = sqrt(errors.reduce(0) { $0+$1*$1 }/Double(objects.count))
         let maximum = stride(from: 0,to: errors.count,by: 2).map { hypot(errors[$0],errors[$0+1]) }.max() ?? .infinity
@@ -198,7 +242,8 @@ enum CheckerboardSolver {
         return CheckerboardSolution(camera: camera,rmsePixels: storedRMSE,
             measurement: .init(method: "checkerboard-planar-v1",columns: observation.columns,rows: observation.rows,
                 squareSizeMeters: observation.squareSizeMeters,maximumResidualPixels: storedMaximum,optimizationIterations: iterations,
-                stageFromBoard: observation.stageFromBoard,imagePoints: observation.imagePoints,focusDistanceMeters: observation.focusDistanceMeters))
+                stageFromBoard: observation.stageFromBoard,imagePoints: observation.imagePoints,
+                focusDistanceMeters: observation.focusDistanceMeters, aprilTag36h11ID: observation.aprilTag36h11ID))
     }
 
     private static func distort(_ p: SIMD2<Double>, camera c: CameraCalibration) -> SIMD2<Double> {

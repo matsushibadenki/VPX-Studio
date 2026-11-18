@@ -1,5 +1,6 @@
 import Foundation
 import simd
+import VPXCaptureProtocol
 
 /// Portable, versioned evidence for one camera configuration. Legacy camera
 /// JSON remains usable for preview but cannot supply missing validation evidence.
@@ -16,13 +17,35 @@ struct CalibrationProfile: Codable, Equatable, Sendable {
     var sampleCount: Int
     var stageConvention: String = "RH-m-Yup-minusZ"
     var stageRegistration: StageRegistration?
+    var capturedLens: CaptureLensMetadata?
+    var intrinsicsMeasurement: CheckerboardIntrinsicsMeasurement?
     var checkerboardMeasurement: CheckerboardMeasurement?
 
     func validate() throws {
         try camera.validate()
+        if let lens = capturedLens {
+            let values = [lens.focalLengthMillimeters, lens.fNumber, lens.digitalZoomRatio].compactMap { $0 }
+            guard lens.model.map({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 128 }) ?? true,
+                  lens.model != nil || !values.isEmpty,
+                  values.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+                throw StudioAssetError.invalid("calibration lens reference")
+            }
+        }
+        if let measurement = intrinsicsMeasurement {
+            try measurement.validate()
+            guard camera.source == .measured,
+                  checkerboardMeasurement != nil || (
+                    sampleCount == measurement.columns * measurement.rows * measurement.viewRMSEPixels.count
+                    && abs(reprojectionRMSEPixels - measurement.reprojectionRMSEPixels) < 1e-6
+                    && stageRegistration == nil) else {
+                throw StudioAssetError.invalid("checkerboard intrinsics evidence")
+            }
+        }
         if let measurement = checkerboardMeasurement {
-            guard measurement.method == "checkerboard-planar-v1", (3...20).contains(measurement.columns),
-                  (3...20).contains(measurement.rows), measurement.columns*measurement.rows == sampleCount,
+            guard measurement.method == "checkerboard-planar-v1",
+                  CheckerboardObservation.validTarget(columns: measurement.columns, rows: measurement.rows,
+                                                      tagID: measurement.aprilTag36h11ID),
+                  measurement.columns*measurement.rows == sampleCount,
                   measurement.squareSizeMeters.isFinite, (0.001...1).contains(measurement.squareSizeMeters),
                   measurement.maximumResidualPixels.isFinite,
                   measurement.maximumResidualPixels >= 0,
@@ -50,7 +73,7 @@ struct CalibrationProfile: Codable, Equatable, Sendable {
             try stageRegistration.validate()
             guard stageRegistration.nodeID == cameraID else { throw StudioAssetError.invalid("registration camera") }
         }
-        guard schemaVersion == 1, revision > 0, !lensID.isEmpty, lensID.count <= 256,
+        guard schemaVersion == (intrinsicsMeasurement == nil ? 1 : 2), revision > 0, !lensID.isEmpty, lensID.count <= 256,
               validatedAt.timeIntervalSince1970.isFinite, expiresAt.timeIntervalSince1970.isFinite,
               expiresAt > validatedAt, reprojectionRMSEPixels.isFinite, reprojectionRMSEPixels >= 0,
               sampleCount >= 4, stageConvention == "RH-m-Yup-minusZ" else {
@@ -69,10 +92,10 @@ struct CalibrationProfile: Codable, Equatable, Sendable {
         }
     }
 
-    enum Issue: String, Codable { case missing, estimated, expired, future, residual, cameraMismatch, formatMismatch, referenceChanged, stageRegistrationMissing, lensConfigurationMismatch }
+    enum Issue: String, Codable { case missing, estimated, expired, future, residual, cameraMismatch, formatMismatch, referenceChanged, stageRegistrationMissing, extrinsicsMissing, lensConfigurationMismatch, lensMetadataUnavailable, capturedLensMismatch }
 
     func issue(now: Date, sourceID: UUID?, width: Int?, height: Int?, referenceChanged: Bool,
-               focusDistanceMeters: Float? = nil, focalLengthMillimeters: Float? = nil) -> Issue? {
+               focusDistanceMeters: Float? = nil, focalLengthMillimeters: Float? = nil, capturedLens liveLens: CaptureLensMetadata? = nil) -> Issue? {
         if referenceChanged { return .referenceChanged }
         if camera.source == .estimated { return .estimated }
         if now < validatedAt { return .future }
@@ -90,7 +113,33 @@ struct CalibrationProfile: Codable, Equatable, Sendable {
             if let first = camera.breathing.first, let last = camera.breathing.last,
                focus < first.focusMeters || focus > last.focusMeters { return .lensConfigurationMismatch }
         }
+        if let expected = capturedLens {
+            if let issue = Self.compareLens(expected: expected, observed: liveLens) { return issue }
+        }
+        if intrinsicsMeasurement != nil && checkerboardMeasurement == nil { return .extrinsicsMissing }
         return nil
+    }
+
+    private static func compareLens(expected: CaptureLensMetadata, observed: CaptureLensMetadata?) -> Issue? {
+        var missing = false
+        if let model = expected.model {
+            if let actual = observed?.model, !actual.isEmpty {
+                if model != actual { return .capturedLensMismatch }
+            } else {
+                missing = true
+            }
+        }
+        let comparisons = [
+            (expected.focalLengthMillimeters, observed?.focalLengthMillimeters, 0.05),
+            (expected.fNumber, observed?.fNumber, 0.05),
+            (expected.digitalZoomRatio, observed?.digitalZoomRatio, 0.01)
+        ]
+        for (reference, actual, tolerance) in comparisons {
+            guard let reference else { continue }
+            guard let actual, actual.isFinite, actual > 0 else { missing = true; continue }
+            if abs(actual - reference) > tolerance { return .capturedLensMismatch }
+        }
+        return missing ? .lensMetadataUnavailable : nil
     }
 
     static func loadCameraOrProfile(_ url: URL) throws -> (CameraCalibration, Self?) {
@@ -131,7 +180,10 @@ extension CalibrationProfile.Issue {
         case .cameraMismatch: .calibrationCameraMismatch
         case .formatMismatch: .calibrationFormatMismatch
         case .referenceChanged: .calibrationReferenceChanged
+        case .extrinsicsMissing: .calibrationExtrinsicsMissing
         case .stageRegistrationMissing: .stageRegistrationMissing
+        case .lensMetadataUnavailable: .calibrationLensMetadataUnavailable
+        case .capturedLensMismatch: .calibrationCapturedLensMismatch
         case .lensConfigurationMismatch: .calibrationLensMismatch
         }
     }

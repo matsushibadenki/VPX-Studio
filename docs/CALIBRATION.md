@@ -1,4 +1,4 @@
-# 校正プロファイル v1
+# 校正プロファイル v1／v2
 
 校正管理の第一段階として、既存CameraCalibrationを検証情報付きプロファイルへ包む。従来JSONはプレビューで使用できるが、LIVE／RECORD開始には検証済みプロファイルが必要。
 
@@ -10,17 +10,19 @@ JSONのトップレベルは以下。日時はISO 8601。`camera`の内部はExa
 
 | フィールド | 内容 |
 | --- | --- |
-| schemaVersion | 1。未知版は拒否 |
+| schemaVersion | 1は従来形式。2は多視点の内部校正結果を含む形式。未知版は拒否 |
 | id / revision | プロファイルUUIDと1以上の版番号 |
 | camera | 内部・外部パラメータ、歪み、breathing、値の出所 |
 | cameraID | 現在選択しているDevice RegistryのUUID |
-| lensID | レンズ構成の識別子。現段階では記録用 |
+| lensID | 校正作業で指定するレンズ構成の識別子 |
+| capturedLens | 任意。校正時に確認したフレームのレンズ情報。指定した項目を本番用の照合に使用 |
 | validatedAt / expiresAt | 最終検証日時と、その後の有効期限 |
 | reprojectionRMSEPixels | 有限・非負の再投影RMSE |
 | sampleCount | 検証に使用した点数。4以上 |
 | stageConvention | RH-m-Yup-minusZ |
 | stageRegistration | 任意。Node ID・接続ID・参照空間revision・固定日時・T_stage_from_nodeWorld。旧ファイルでは省略可能 |
-| checkerboardMeasurement | 任意。ボード対応点から求めた外部姿勢の測定条件・点列・最大残差・フォーカス・反復回数 |
+| intrinsicsMeasurement | v2で必須。ボード寸法、ビュー別・全体のRMSE、最大残差 |
+| checkerboardMeasurement | 任意。外部姿勢の測定条件・点列・最大残差・フォーカス・反復回数。AprilTagの場合はタグIDを含む |
 
 ファイルは1MiB以下。寸法は整数、外部パラメータはスケール・せん断・反転のない剛体変換に限る。プロファイル形式の不正ファイルを旧形式として読み直すフォールバックは行わない。保存は形式検証後にatomic writeを行う。
 
@@ -33,6 +35,12 @@ JSONのトップレベルは以下。日時はISO 8601。`camera`の内部はExa
 旧形式を読み込んだ場合は検証済みという情報を補わない。Inspectorで不足理由を確認できる。現在の診断JSON v13は校正プロファイルにステージ対応とボード測定条件も含めて保存する。
 
 公称焦点距離の設定が基準値と異なる場合、フォーカス設定がbreathing表の範囲外の場合も本番開始・ステージ固定を拒否する。外部姿勢の測定から新revisionを生成する手順は[ボード対応点による校正](CHECKERBOARD-CALIBRATION.md)を参照。
+
+## ARKitレンズ情報の照合
+
+校正済みの機材構成で採取したMac診断JSONの `nodeMonitoring[].lensFrame.metadata.lens` から、確認済みの項目をプロファイルの `capturedLens` に設定する。レンズ名 `model` は文字列を完全一致で比較する。焦点距離 `focalLengthMillimeters` とF値 `fNumber` は差が0.05、デジタルズーム比 `digitalZoomRatio` は差が0.01を超えると不一致と判定する。少なくとも1項目を指定する。
+
+Macは復号した映像フレーム自体のメタデータを評価する。基準に指定した項目が欠けた場合はレンズ情報不足を表示し、値が異なる場合は校正との不一致を表示する。どちらの場合もステージ固定とLIVE／RECORDの開始を拒否し、本番中は既存の描画保護を適用する。`capturedLens` を省略した既存プロファイルには、従来の校正チェックを適用する。
 
 ## Nodeワールドとステージの対応
 
@@ -48,7 +56,7 @@ JSONのトップレベルは以下。日時はISO 8601。`camera`の内部はExa
 
 ## 適用範囲と残作業
 
-AprilTag／チェッカーボードの画像検出、実機レンズID・AF位置の自動取得は未実装。順序付き対応点と既知のボード姿勢からカメラの外部姿勢を計算できるが、ボード姿勢や内部校正は測定工程で正しく用意する必要がある。署名や測定証明の真正性までは保証しない。
+Macの校正ツールは、チェッカーボードとAprilTag 36h11の画像から外部姿勢用の対応点を検出する。外部姿勢を求めるには、既知のターゲットのステージ姿勢と、対象のカメラ構成に対応する内部校正が必要。外部レンズエンコーダからのレンズID・AF位置取得は今後の作業。 [実行手順](CHECKERBOARD-CALIBRATION.md)
 
 `cameraID`は現在のアプリの入力IDであり、端末再登録後に変わる場合は再照合が必要。Node別の対応は各カメラのプロファイルに保存する。複数Nodeのプロファイル自動切替・管理UIはPhase 4以降。手動固定の物理的な精度認定はPending。
 

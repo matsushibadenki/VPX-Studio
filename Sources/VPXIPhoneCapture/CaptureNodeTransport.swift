@@ -24,6 +24,7 @@ final class CaptureNodeTransport: @unchecked Sendable {
             try lock.withLock { stream }?.sendControl(CaptureMessageEnvelope(kind: .mediaControlResult, payload: result))
         }
     }
+    func sendMotion(_ sample: CaptureMotionSample) { lock.withLock { telemetry }?.send(.motion(sample)) }
     func sendPose(_ pose: CapturePosePacket) { lock.withLock { telemetry }?.send(.pose(pose)) }
     func sendStatus(_ status: CaptureNodeStatus) { lock.withLock { telemetry }?.send(.nodeStatus(status)) }
     func sendQuality(_ event: CaptureQualityEvent) throws {

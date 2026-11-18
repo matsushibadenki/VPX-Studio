@@ -353,6 +353,11 @@ struct StudioView: View {
                   systemImage: studio.calibrationIssue == nil ? "checkmark.shield" : "exclamationmark.shield")
                 .font(.caption).foregroundStyle(studio.calibrationIssue == nil ? Color.green : Color.orange)
             if let profile = studio.calibrationProfile {
+                if let measurement = profile.intrinsicsMeasurement {
+                    metric(localization.text(.checkerboardIntrinsicRMSE),
+                           String(format: "%.2f px", measurement.reprojectionRMSEPixels))
+                    metric(localization.text(.checkerboardViewCount), String(measurement.viewRMSEPixels.count))
+                }
                 if let measurement = profile.checkerboardMeasurement {
                     Label(localization.text(.checkerboardMeasured),systemImage: "checkerboard.rectangle")
                         .font(.caption)

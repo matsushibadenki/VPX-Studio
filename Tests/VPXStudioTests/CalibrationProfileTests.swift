@@ -1,4 +1,5 @@
 import XCTest
+import VPXCaptureProtocol
 @testable import VPXStudio
 
 final class CalibrationProfileTests: XCTestCase {
@@ -10,9 +11,9 @@ final class CalibrationProfileTests: XCTestCase {
             reprojectionRMSEPixels: 0.5, sampleCount: 24)
     }
     func issue(_ p: CalibrationProfile, time: Double = 1500, node: UUID? = nil,
-               width: Int = 1920, changed: Bool = false) -> CalibrationProfile.Issue? {
+               width: Int = 1920, changed: Bool = false, lens: CaptureLensMetadata? = nil) -> CalibrationProfile.Issue? {
         p.issue(now: Date(timeIntervalSince1970: time), sourceID: node ?? p.cameraID,
-                width: width, height: 1080, referenceChanged: changed)
+                width: width, height: 1080, referenceChanged: changed, capturedLens: lens)
     }
     func testProductionEvidenceAndExpiryBoundaries() throws {
         var p = profile(); try p.validate()
@@ -49,6 +50,46 @@ final class CalibrationProfileTests: XCTestCase {
         XCTAssertEqual(status(focus: .nan),.lensConfigurationMismatch)
         XCTAssertEqual(status(focus: 2,focal: 50),.lensConfigurationMismatch)
     }
+    func testCapturedLensChecksCurrentFrameAgainstCalibratedValues() throws {
+        var p = profile()
+        func lens(_ model: String? = "Wide", focal: Double? = 6.86,
+                  aperture: Double? = 1.78, zoom: Double? = 1) -> CaptureLensMetadata {
+            .init(model: model, focalLengthMillimeters: focal, fNumber: aperture, digitalZoomRatio: zoom)
+        }
+        XCTAssertNil(issue(p, lens: lens("Other")))
+        p.capturedLens = lens()
+        try p.validate()
+        p = try JSONDecoder().decode(CalibrationProfile.self, from: JSONEncoder().encode(p))
+        XCTAssertNil(issue(p, lens: lens(focal: 6.88, aperture: 1.8, zoom: 1.005)))
+        XCTAssertEqual(issue(p, lens: lens("Ultra Wide")), .capturedLensMismatch)
+        XCTAssertEqual(issue(p, lens: lens(focal: 9)), .capturedLensMismatch)
+        XCTAssertEqual(issue(p, lens: lens(aperture: 2.8)), .capturedLensMismatch)
+        XCTAssertEqual(issue(p, lens: lens(zoom: 2)), .capturedLensMismatch)
+        XCTAssertEqual(issue(p, lens: lens(zoom: nil)), .lensMetadataUnavailable)
+        XCTAssertEqual(issue(p), .lensMetadataUnavailable)
+        p.capturedLens = lens(nil, focal: nil, aperture: nil, zoom: nil)
+        XCTAssertThrowsError(try p.validate())
+    }
+    func testMultiviewIntrinsicsCanBeSavedButRequireStageExtrinsics() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        var p = profile()
+        p.schemaVersion = 2
+        p.sampleCount = 6 * 7 * 5
+        p.intrinsicsMeasurement = .init(method: "checkerboard-multiview-v1", columns: 7, rows: 5,
+            squareSizeMeters: 0.03, viewRMSEPixels: Array(repeating: 0.5, count: 6),
+            maximumResidualPixels: 1, reprojectionRMSEPixels: 0.5)
+        try p.save(to: url)
+        let loaded = try XCTUnwrap(CalibrationProfile.loadCameraOrProfile(url).1)
+        XCTAssertEqual(loaded, p)
+        XCTAssertEqual(issue(loaded), .extrinsicsMissing)
+        p.sampleCount -= 1
+        XCTAssertThrowsError(try p.validate())
+        p = loaded
+        p.schemaVersion = 1
+        XCTAssertThrowsError(try p.validate())
+    }
+
     func testPersistenceAndLegacyPreviewMigration() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
         defer { try? FileManager.default.removeItem(at: url) }

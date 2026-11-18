@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 import VisionKit
 import AVFoundation
+import CoreMotion
 import VPXCaptureProtocol
 
 public enum CaptureNodeLanguage: String, CaseIterable, Identifiable {
@@ -61,6 +62,8 @@ public final class CaptureNodeSessionModel {
     private let displayName: String
     private var submittedExternalHEVC = false
     private var externalVideoInput: ExternalVideoInput?
+    private let motionManager: CMMotionManager?
+    private var motionTask: Task<Void, Never>?
     private let externalCapabilities: Set<CaptureNodeCapability>?
     public private(set) var externalCaptureID: UUID?
     /// Notify the native producer to force a new HEVC key frame.
@@ -120,10 +123,12 @@ public final class CaptureNodeSessionModel {
             batteryState: battery, thermalState: thermal, isCapturing: isCapturing))
     }
 
-    public init(nodeID: UUID = UUID(), displayName: String = UIDevice.current.name,
-                externalCapabilities: Set<CaptureNodeCapability>? = nil) {
-        self.externalCapabilities = externalCapabilities?.union([.video, .timeSync])
-        self.nodeID = nodeID
+    public init(nodeID: UUID? = nil, displayName: String = UIDevice.current.name,
+                externalCapabilities: Set<CaptureNodeCapability>? = nil, sendDeviceMotion: Bool = false) {
+        let motion = sendDeviceMotion && externalCapabilities != nil ? CMMotionManager() : nil
+        motionManager = motion?.isDeviceMotionAvailable == true ? motion : nil
+        self.externalCapabilities = externalCapabilities?.union(motion?.isDeviceMotionAvailable != true ? [.video, .timeSync] : [.video, .timeSync, .imu])
+        self.nodeID = nodeID ?? Self.persistentNodeID(externalInput: externalCapabilities != nil)
         self.displayName = displayName
         discovery.onHostsChanged = { [weak self] hosts in
             Task { @MainActor [weak self] in
@@ -163,6 +168,17 @@ public final class CaptureNodeSessionModel {
         coordinator.onEncodingError = { [weak self] error in
             self?.failFromAnyQueue(error)
         }
+    }
+
+    private static func persistentNodeID(externalInput: Bool) -> UUID {
+        let key = externalInput ? "vpx.externalCaptureNodeID" : "vpx.captureNodeID"
+        let defaults = UserDefaults.standard
+        if let stored = defaults.string(forKey: key), let id = UUID(uuidString: stored) {
+            return id
+        }
+        let id = UUID()
+        defaults.set(id.uuidString, forKey: key)
+        return id
     }
 
     public func startDiscovery() {
@@ -269,6 +285,7 @@ public final class CaptureNodeSessionModel {
         guard !requestingCamera, !isCapturing else { return }
         if externalCapabilities != nil {
             externalCaptureID = UUID()
+            startExternalMotion()
             isCapturing = true
             status = .capturing
             requestVideoKeyFrame()
@@ -339,7 +356,35 @@ public final class CaptureNodeSessionModel {
         try transport.sendQuality(event)
     }
 
+    private func startExternalMotion() {
+        guard let manager = motionManager else { return }
+        manager.deviceMotionUpdateInterval = 1.0 / 30
+        manager.startDeviceMotionUpdates(using: .xArbitraryZVertical)
+        motionTask = Task { @MainActor [weak self] in
+            var previous: UInt64 = 0
+            while !Task.isCancelled {
+                guard let self else { return }
+                if let motion = manager.deviceMotion,
+                   let time = UInt64(exactly: (motion.timestamp * 1e9).rounded(.towardZero)), time > previous {
+                    let q = motion.attitude.quaternion
+                    let rate = motion.rotationRate
+                    let sample = CaptureMotionSample(captureTimeNanoseconds: time,
+                        attitudeQuaternion: [q.x, q.y, q.z, q.w],
+                        angularVelocityRadiansPerSecond: [rate.x, rate.y, rate.z])
+                    if sample.isValid {
+                        transport.sendMotion(sample)
+                        previous = time
+                    }
+                }
+                do { try await Task.sleep(for: .milliseconds(33)) } catch { return }
+            }
+        }
+    }
+
     public func stopCapture() {
+        motionTask?.cancel()
+        motionTask = nil
+        motionManager?.stopDeviceMotionUpdates()
         captureGeneration=UUID(); requestingCamera=false
         submittedExternalHEVC = false
         externalVideoInput?.stop()
@@ -445,8 +490,10 @@ public struct CaptureNodeControlView: View {
     @Bindable private var model: CaptureNodeSessionModel
     @State private var showsScanner = false
     private let stopOnDisappear: Bool
+    private let requiresWorldTracking: Bool
 
-    public init(model: CaptureNodeSessionModel, stopOnDisappear: Bool = true) {
+    public init(model: CaptureNodeSessionModel, stopOnDisappear: Bool = true, requiresWorldTracking: Bool = false) {
+        self.requiresWorldTracking = requiresWorldTracking
         self.stopOnDisappear = stopOnDisappear
         _model = Bindable(model)
     }
@@ -550,8 +597,10 @@ public struct CaptureNodeControlView: View {
     private var captureCard: some View {
         card(title: text(.capture)) {
             if !model.usesExternalInput {
-                Toggle(text(.tracking), isOn: $model.enableTracking)
-                    .disabled(model.configurationLocked || !IPhoneCaptureCoordinator.supportsTracking)
+                if !requiresWorldTracking {
+                    Toggle(text(.tracking), isOn: $model.enableTracking)
+                        .disabled(model.configurationLocked || !IPhoneCaptureCoordinator.supportsTracking)
+                }
                 Toggle(text(.depth), isOn: $model.enableDepth).disabled(model.configurationLocked || !model.supportsDepth)
             }
             Button(model.isCapturing ? text(.stopCapture) : text(.startCapture)) {

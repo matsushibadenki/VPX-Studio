@@ -216,7 +216,8 @@ final class StudioModel {
             width: frame.map { CVPixelBufferGetWidth($0.pixelBuffer) },
             height: frame.map { CVPixelBufferGetHeight($0.pixelBuffer) },
             referenceChanged: calibrationReferenceInvalidated || (selectedTrackingNodeID.flatMap { trackingReferences[$0]?.requiresReset } ?? false),
-            focusDistanceMeters: focusDistanceMeters,focalLengthMillimeters: focalLengthMillimeters)
+            focusDistanceMeters: focusDistanceMeters,focalLengthMillimeters: focalLengthMillimeters,
+            capturedLens: frame?.capturedLens)
         if let issue { return issue }
         if let nodeID = selectedTrackingNodeID {
             guard let registration = profile.stageRegistration else { return .stageRegistrationMissing }
@@ -383,6 +384,11 @@ final class StudioModel {
                 let observation = try CheckerboardObservation.load(url)
                 guard observation.cameraID == sourceID,
                       originalProfile.map({ $0.lensID == observation.lensID }) ?? true else { throw CheckerboardError.intrinsicsMismatch }
+                if let reference = observation.intrinsicsReference {
+                    guard originalProfile?.id == reference.id, originalProfile?.revision == reference.revision else {
+                        throw CheckerboardError.intrinsicsMismatch
+                    }
+                }
                 if let originalProfile {
                     guard originalProfile.validatedAt <= Date(), Date() < originalProfile.expiresAt else { throw CheckerboardError.intrinsicsExpired }
                 }
@@ -399,10 +405,13 @@ final class StudioModel {
             guard oldRevision < Int.max else { throw CheckerboardError.invalidObservation }
             let expiry = min(observation.expiresAt, originalProfile?.expiresAt ?? observation.expiresAt)
             guard Date() < expiry else { throw CheckerboardError.intrinsicsExpired }
-            var profile = CalibrationProfile(id: calibrationProfile?.id ?? UUID(),revision: oldRevision+1,
+            var profile = CalibrationProfile(schemaVersion: originalProfile?.schemaVersion ?? 1,
+                id: originalProfile?.id ?? UUID(),revision: oldRevision+1,
                 camera: solution.camera,cameraID: sourceID,lensID: observation.lensID,
                 validatedAt: observation.measuredAt,expiresAt: expiry,
                 reprojectionRMSEPixels: solution.rmsePixels,sampleCount: observation.imagePoints.count)
+            profile.intrinsicsMeasurement = originalProfile?.intrinsicsMeasurement
+            profile.capturedLens = originalProfile?.capturedLens
             profile.checkerboardMeasurement = solution.measurement
             try profile.validate()
             resetTrackingOrigin()
@@ -427,7 +436,8 @@ final class StudioModel {
         let now = DispatchTime.now().uptimeNanoseconds
         guard profile.issue(now: Date(), sourceID: node, width: CVPixelBufferGetWidth(frame.pixelBuffer),
                 height: CVPixelBufferGetHeight(frame.pixelBuffer), referenceChanged: false,
-                focusDistanceMeters: focusDistanceMeters,focalLengthMillimeters: focalLengthMillimeters) == nil,
+                focusDistanceMeters: focusDistanceMeters,focalLengthMillimeters: focalLengthMillimeters,
+                capturedLens: frame.capturedLens) == nil,
               poseHealth[node]?.effectiveQuality(now: now,
                 clock: .evaluate(lastAccepted: clockLastAccepted[node], now: now), timeoutSeconds: 0.15) == .nominal,
               StageAnchorTiming.accepts(videoHostSeconds: frame.telemetry.captured,
@@ -465,6 +475,7 @@ final class StudioModel {
     private var captureNodeHost: CaptureNodeBonjourHost?
     private var captureDepthBuffers: [UUID: CaptureDepthBuffer] = [:]
     private var captureQualityEvents: [UUID: CaptureQualityEvent] = [:]
+    private var nodeMotion: [UUID: NodeMotionSnapshot] = [:]
     private var nodeStatusHealth: [UUID: NodeStatusHealth] = [:]
     private(set) var nodeMonitoring: [NodeMonitoringSnapshot] = []
     private var mediaControls: [UUID: NodeMediaControl] = [:]
@@ -683,6 +694,17 @@ final class StudioModel {
                 Task { @MainActor [weak self] in
                     guard let self, captureConnections[nodeID] == connectionID else { return }
                     switch payload {
+                    case .motion(let sample):
+                        let now = DispatchTime.now().uptimeNanoseconds
+                        guard sample.isValid,
+                              nodeMotion[nodeID].map({ sample.captureTimeNanoseconds > $0.sample.captureTimeNanoseconds }) ?? true,
+                              ClockFreshness.evaluate(lastAccepted: clockLastAccepted[nodeID], now: now) == .current,
+                              let stats = clockStatistics[nodeID],
+                              let time = HostClockMapping.hostTime(nodeNanoseconds: sample.captureTimeNanoseconds,
+                                offset: stats.nodeClockOffsetNanoseconds, driftPPM: stats.driftPartsPerMillion,
+                                referenceHost: stats.referenceHostNanoseconds),
+                              (-50_000_000...500_000_000).contains(Double(now) - time) else { return }
+                        nodeMotion[nodeID] = NodeMotionSnapshot(sample: sample, capturedHostNanoseconds: time)
                     case .nodeStatus(let packet):
                         let now = DispatchTime.now().uptimeNanoseconds
                         guard let stats = clockStatistics[nodeID],
@@ -715,6 +737,7 @@ final class StudioModel {
                     clockLastAccepted.removeValue(forKey: nodeID); clockStatistics.removeValue(forKey: nodeID)
                     poseJitterBuffers.removeValue(forKey: nodeID); poseHealth.removeValue(forKey: nodeID); poseTimelines.removeValue(forKey: nodeID)
                     captureDepthBuffers.removeValue(forKey: nodeID); captureConnections.removeValue(forKey: nodeID)
+                    nodeMotion.removeValue(forKey: nodeID)
                     nodeStatusHealth.removeValue(forKey: nodeID)
                     mediaControls.removeValue(forKey: nodeID); captureControlChannels.removeValue(forKey: nodeID)
                     let previous=captureQualityEvents[nodeID]
@@ -761,6 +784,7 @@ final class StudioModel {
         clockStatistics.removeAll()
         clockLastAccepted.removeAll()
         captureDepthBuffers.removeAll(); captureQualityEvents.removeAll()
+        nodeMotion.removeAll()
         nodeStatusHealth.removeAll(); nodeMonitoring.removeAll()
         mediaControls.removeAll(); captureControlChannels.removeAll()
         for (id, connectionID) in captureConnections {
@@ -876,6 +900,13 @@ final class StudioModel {
             let clock = ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id], now: now)
             let video = source.monitoringSnapshot()
             let age = clock == .current ? video.captureAgeMilliseconds(now: Double(now) / 1_000_000_000) : nil
+            var motion = nodeMotion[id]
+            if clock != .current || motion.map({ Double(now) - $0.capturedHostNanoseconds > 500_000_000 }) == true {
+                motion = nil
+            }
+            if let captured = video.captured, let motionTime = motion?.capturedHostNanoseconds {
+                motion?.videoOffsetMilliseconds = (motionTime / 1e9 - captured) * 1_000
+            }
             return NodeMonitoringSnapshot(id: id, name: source.descriptor.displayName,
                 connected: captureConnections[id] != nil, selected: selectedSourceID == id, clock: clock,
                 frameAgeMilliseconds: age, decodeMilliseconds: age.map { $0 <= 500 } == true ? video.decodeMilliseconds : nil,
@@ -884,7 +915,7 @@ final class StudioModel {
                 roundTripMilliseconds: clockStatistics[id].map { $0.roundTripNanoseconds / 1_000_000 },
                 jitterMilliseconds: clockStatistics[id].map { $0.jitterNanoseconds / 1_000_000 },
                 trackingReason: captureQualityEvents[id]?.reason.rawValue,
-                status: nodeStatusHealth[id]?.current(now: now, clock: clock), mediaControl: mediaControls[id])
+                status: nodeStatusHealth[id]?.current(now: now, clock: clock), lensFrame: age.map { $0 <= 500 } == true ? video.lensFrame : nil, motion: motion, mediaControl: mediaControls[id])
         }
     }
 
@@ -971,6 +1002,7 @@ final class StudioModel {
 
     private func attachCaptureNode(hello: CaptureNodeHello, channel: CaptureSecureChannel) {
         if selectedSourceID == hello.nodeID, captureConnections[hello.nodeID] != nil { finishCameraRecording() }
+        nodeMotion.removeValue(forKey: hello.nodeID)
         nodeStatusHealth.removeValue(forKey: hello.nodeID)
         let connectionID=channel.connectionID
         mediaControls[hello.nodeID] = NodeMediaControl()

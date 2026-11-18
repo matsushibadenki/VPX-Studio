@@ -15,12 +15,18 @@ final class CheckerboardCalibrationTests: XCTestCase {
     }
     func observation(camera c: CameraCalibration, source: UUID = UUID(),
                      worldCamera: simd_double4x4? = nil, worldBoard: simd_double4x4 = matrix_identity_double4x4,
-                     noise: Double = 0) -> CheckerboardObservation {
+                     noise: Double = 0, tagID: Int? = nil) -> CheckerboardObservation {
         let expected = worldCamera ?? matrix(position: SIMD3(0.2,0.15,3),y: 0.15,x: -0.08)
         var observation = CheckerboardObservation(cameraID: source,lensID: "35mm-fixed",imageWidth: 1920,imageHeight: 1080,
             columns: 6,rows: 5,squareSizeMeters: 0.12,imagePoints: [],
             stageFromBoard: (0..<4).flatMap { [Float(worldBoard[$0].x),Float(worldBoard[$0].y),Float(worldBoard[$0].z),Float(worldBoard[$0].w)] },
             measuredAt: Date(timeIntervalSince1970: 1000),expiresAt: Date(timeIntervalSince1970: 2000))
+        if let tagID {
+            observation.columns = 2
+            observation.rows = 2
+            observation.squareSizeMeters = 0.24
+            observation.aprilTag36h11ID = tagID
+        }
         // Generate observations from a known VPX camera, independently of the solver.
         observation.imagePoints = observation.objectPoints.enumerated().map { index, point in
             let p = simd_inverse(expected)*worldBoard*SIMD4(point,1)
@@ -46,6 +52,28 @@ final class CheckerboardCalibrationTests: XCTestCase {
         XCTAssertLessThan(result.measurement.maximumResidualPixels,0.001)
         XCTAssertEqual(result.camera.source,.manufacturer)
     }
+    func testAprilTagCornersSolveAndPersistKnownStagePose() throws {
+        let c = camera()
+        let expected = matrix(position: SIMD3(0.2, 0.15, 2), y: 0.15, x: -0.08)
+        let board = matrix(position: SIMD3(0.3, -0.2, 0.25), y: -0.12, x: 0.1)
+        var points = observation(camera: c, worldCamera: expected, worldBoard: board, tagID: 42)
+        let date = Date(timeIntervalSince1970: 1500)
+        let result = try CheckerboardSolver.solve(points, intrinsics: c, now: date)
+        assertPose(result.camera.transform, expected, accuracy: 0.001)
+        XCTAssertEqual(result.measurement.aprilTag36h11ID, 42)
+        XCTAssertLessThan(result.rmsePixels, 0.001)
+        var profile = CalibrationProfile(id: UUID(), revision: 1, camera: result.camera, cameraID: points.cameraID,
+            lensID: points.lensID, validatedAt: points.measuredAt, expiresAt: points.expiresAt,
+            reprojectionRMSEPixels: result.rmsePixels, sampleCount: 4)
+        profile.checkerboardMeasurement = result.measurement
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        try profile.save(to: url)
+        XCTAssertEqual(try CalibrationProfile.loadCameraOrProfile(url).1, profile)
+        points.aprilTag36h11ID = 587
+        XCTAssertThrowsError(try CheckerboardSolver.solve(points, intrinsics: c, now: date))
+    }
+
     func testNonidentityBoardPoseAndFrontFacingConvention() throws {
         let c = camera()
         let expected = matrix(position: SIMD3(0.1,0.2,3.2),y: 0.1,x: -0.05)
@@ -141,6 +169,12 @@ final class CheckerboardCalibrationTests: XCTestCase {
         XCTAssertNotNil(profile.checkerboardMeasurement); XCTAssertNil(profile.stageRegistration)
         XCTAssertEqual(model.calibrationIssue,.formatMismatch) // No live video supplied.
         observation.expiresAt = Date().addingTimeInterval(86400)
+        observation.intrinsicsReference = .init(id: profile.id, revision: profile.revision + 1)
+        try encoder.encode(observation).write(to: pointsURL)
+        await model.solveCheckerboard(from: pointsURL)
+        XCTAssertEqual(model.checkerboardError, .intrinsicsMismatch)
+        XCTAssertEqual(model.calibrationProfile, profile)
+        observation.intrinsicsReference = .init(id: profile.id, revision: profile.revision)
         try encoder.encode(observation).write(to: pointsURL)
         await model.solveCheckerboard(from: pointsURL)
         let revised = try XCTUnwrap(model.calibrationProfile)
@@ -148,6 +182,7 @@ final class CheckerboardCalibrationTests: XCTestCase {
         let exported = root.appendingPathComponent("exported.json")
         model.saveCalibration(to: exported)
         XCTAssertEqual(try CalibrationProfile.loadCameraOrProfile(exported).1,revised)
+        observation.intrinsicsReference = .init(id: revised.id, revision: revised.revision)
         observation.imagePoints[4].x += 80
         try encoder.encode(observation).write(to: pointsURL)
         await model.solveCheckerboard(from: pointsURL)

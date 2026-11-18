@@ -340,7 +340,10 @@ final class CaptureNodeProtocolTests: XCTestCase {
                 width: 1_920,
                 height: 1_080,
                 codec: "hvc1",
-                isKeyFrame: true
+                isKeyFrame: true,
+                cameraMetadata: CaptureCameraMetadata(cameraID: "arkit.back", source: "arkit",
+                    colorPrimaries: nil, transferFunction: nil, yCbCrMatrix: nil, exposureSeconds: 1.0 / 60,
+                    lens: CaptureLensMetadata(model: "Wide", focalLengthMillimeters: 5.7, fNumber: 1.8, digitalZoomRatio: 1))
             ),
             encodedData: Data(repeating: 0xAB, count: 1_024),
             parameterSets: [Data([1, 2]), Data([3, 4]), Data([5, 6])]

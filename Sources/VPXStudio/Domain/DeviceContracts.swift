@@ -1,3 +1,4 @@
+import VPXCaptureProtocol
 import CoreMedia
 import CoreVideo
 import Foundation
@@ -63,6 +64,7 @@ struct VideoFrame {
     let pixelBuffer: CVPixelBuffer
     let quality: StreamQuality
     var telemetry = FrameTelemetry()
+    var capturedLens: CaptureLensMetadata?
 }
 
 struct PoseSample {

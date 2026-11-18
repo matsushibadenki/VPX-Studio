@@ -48,11 +48,11 @@ final class IPhoneVideoCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
             cameraMetadata: Self.metadata(image, cameraID: cameraID, source: "avcapture"))
         onSample?(CaptureVideoSample(header: header, pixelBuffer: image))
     }
-    static func metadata(_ image: CVPixelBuffer, cameraID: String, source: String, intrinsics: [Float]? = nil) -> CaptureCameraMetadata {
+    static func metadata(_ image: CVPixelBuffer, cameraID: String, source: String, intrinsics: [Float]? = nil, exposure: Double? = nil, lens: CaptureLensMetadata? = nil) -> CaptureCameraMetadata {
         func value(_ key: CFString) -> String? { CVBufferCopyAttachment(image, key, nil) as? String }
         return CaptureCameraMetadata(cameraID: cameraID, source: source,
             colorPrimaries: value(kCVImageBufferColorPrimariesKey), transferFunction: value(kCVImageBufferTransferFunctionKey),
-            yCbCrMatrix: value(kCVImageBufferYCbCrMatrixKey), intrinsics: intrinsics)
+            yCbCrMatrix: value(kCVImageBufferYCbCrMatrixKey), intrinsics: intrinsics, exposureSeconds: exposure, lens: lens)
     }
 }
 #endif

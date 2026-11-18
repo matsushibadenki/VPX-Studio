@@ -19,7 +19,7 @@ public enum CaptureTrackingQuality: String, Codable, Sendable {
 }
 
 public struct CaptureNodeHello: Codable, Sendable, Equatable {
-    public static let currentProtocolVersion = 4
+    public static let currentProtocolVersion = 5
 
     public let protocolVersion: Int
     public let nodeID: UUID
