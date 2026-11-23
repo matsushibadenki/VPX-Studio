@@ -90,9 +90,15 @@ struct DepthFrame {
 }
 
 protocol VideoSource: AnyObject {
+    /// Plug-ins used to deliver this source's frames. Built-in adapters may use an empty list.
+    var recordingPlugins: [TakeProvenance.Plugin] { get }
     var descriptor: DeviceDescriptor { get }
     func start() throws
     func stop()
+}
+
+extension VideoSource {
+    var recordingPlugins: [TakeProvenance.Plugin] { [] }
 }
 
 protocol PoseSource: AnyObject {

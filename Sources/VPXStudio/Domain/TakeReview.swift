@@ -51,6 +51,22 @@ actor TakeReviewService {
         return profile
     }
 
+    func restoreLUT(directory: URL, manifest: TakeManifest, relativePath: String) throws -> CompositeLUT {
+        let scoped = directory.startAccessingSecurityScopedResource()
+        defer { if scoped { directory.stopAccessingSecurityScopedResource() } }
+        guard try TakeManifest.load(from: directory) == manifest else { throw PlaybackError.reviewChanged }
+        guard let hash = manifest.assets.first(where: { $0.role == .lut && $0.relativePath == relativePath })?.sha256,
+              let reference = manifest.provenance?.recording?.lutUsage?
+                .compactMap({ $0.applied ? $0.reference : nil }).first(where: { $0.sha256 == hash }) else {
+            throw TakeManifest.PlaybackError.unverified
+        }
+        let bytes = try manifest.verifiedAssetData(relativePath: relativePath, role: .lut, in: directory,
+                                                   maximumSize: CompositeLUT.maximumFileSize)
+        let lut = try CompositeLUT.parse(bytes, name: reference.name)
+        try Task.checkCancellation()
+        return lut
+    }
+
     func loadFrameIndex(directory: URL, manifest: TakeManifest) throws -> [TakeAuxiliaryTracks.Row] {
         let scoped = directory.startAccessingSecurityScopedResource()
         defer { if scoped { directory.stopAccessingSecurityScopedResource() } }

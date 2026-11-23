@@ -92,6 +92,7 @@ final class PoseTimelineTests: XCTestCase {
         var settings = StudioRenderSettings()
         settings.inputEncoding = .sRGB; settings.profile = .reviewCinema
         settings.requirePoseAlignment = true
+        settings.debugView = .pose
         settings.poseAlignment = PoseCameraAlignment(sourceID: source,history: history(),stageFromNodeWorld: transform(0),maximumAge: 0.5)
         let metrics = RealtimeMetricsStore()
         func render(captured: Double?, sourceID: UUID) throws {
@@ -105,14 +106,26 @@ final class PoseTimelineTests: XCTestCase {
         try render(captured: 1.01,sourceID: source)
         XCTAssertEqual(metrics.read().protection,.normal)
         XCTAssertEqual(metrics.read().poseAlignment?.mode,.interpolated)
+        let preview = try XCTUnwrap(metrics.read().poseAlignment?.preview)
+        XCTAssertEqual(preview.sourceID, source)
+        XCTAssertEqual(preview.frameIdentifier, 1)
+        XCTAssertEqual(preview.positionMeters.x, 0.05, accuracy: 0.0001)
+        XCTAssertEqual(abs(preview.orientationXYZW.y), sin(0.025), accuracy: 0.0001)
         try render(captured: nil,sourceID: source)
         XCTAssertEqual(metrics.read().protection,.poseUnaligned)
         try render(captured: 1.01,sourceID: UUID())
         XCTAssertEqual(metrics.read().protection,.poseUnaligned)
         XCTAssertEqual(metrics.read().poseAlignment?.mode,.unavailable)
+        XCTAssertNil(metrics.read().poseAlignment?.preview)
         try render(captured: 1.03,sourceID: source)
         XCTAssertEqual(metrics.read().protection,.normal)
         XCTAssertEqual(metrics.read().poseAlignment?.mode,.predicted)
+        XCTAssertNotNil(metrics.read().poseAlignment?.preview)
+        settings.protectMissingInput = true
+        try render(captured: 1.03,sourceID: source)
+        XCTAssertEqual(metrics.read().poseAlignment?.mode,.predicted)
+        XCTAssertNil(metrics.read().poseAlignment?.preview)
+        settings.protectMissingInput = false
         try render(captured: 1.06,sourceID: source)
         XCTAssertEqual(metrics.read().protection,.poseUnaligned)
     }

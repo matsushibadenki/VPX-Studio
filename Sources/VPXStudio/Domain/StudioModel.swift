@@ -125,13 +125,13 @@ final class StudioModel {
                 guard recordingStartID == id else { return }
                 guard granted else { throw TakeMicrophone.Failure.permissionDenied }
                 guard canStartCameraRecording, selectedSourceID == sourceID else { return }
-                let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory,
+                let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(recordingSourceID: sourceID), parent: directory,
                     sourceID: sourceID, composite: true, preserve10Bit: preserve10Bit,
-                    sceneSnapshot: TakeSceneSnapshot(scene: scene))
+                    sceneSnapshot: TakeSceneSnapshot(scene: scene), compositeLUT: compositeLUT)
                 let microphone = TakeMicrophone(recorder: recorder)
                 try await microphone.start()
                 guard recordingStartID == id, canStartCameraRecording, selectedSourceID == sourceID,
-                      realtimeCore.latestVideoFrame.startRecording(recorder, sourceID: sourceID) else {
+                      realtimeCore.startRecording(recorder, sourceID: sourceID) else {
                     microphone.stop()
                     return
                 }
@@ -157,9 +157,9 @@ final class StudioModel {
         recordingSecondsRemaining = nil
         recordingError = nil; savedRecording = nil
         do {
-            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(), parent: directory, sourceID: id, preserve10Bit: preserve10Bit,
+            let recorder = try CameraTakeRecorder(request: takeSnapshotRequest(recordingSourceID: id), parent: directory, sourceID: id, preserve10Bit: preserve10Bit,
                 sceneSnapshot: TakeSceneSnapshot(scene: scene))
-            guard realtimeCore.latestVideoFrame.startRecording(recorder, sourceID: id) else { return }
+            guard realtimeCore.startRecording(recorder, sourceID: id) else { return }
             isRecording = true
             if !isRecording { _ = realtimeCore.latestVideoFrame.stopRecording() }
         } catch { recordingError = String(describing: error) }
@@ -198,6 +198,33 @@ final class StudioModel {
     var qualityProfile = LiveQualityProfile.liveFast
     var inputEncoding = SDRInputEncoding.automatic
     var debugView = CompositeDebugView.composite
+    private(set) var compositeLUT: CompositeLUT?
+    private(set) var isLoadingCompositeLUT = false
+
+    func loadCompositeLUT(from url: URL) async {
+        guard mode != .live, mode != .record, !isRecording, !isPreparingRecording, !isLoadingCompositeLUT else { return }
+        isLoadingCompositeLUT = true
+        defer { isLoadingCompositeLUT = false }
+        do {
+            let lut = try await Task.detached { try CompositeLUT.load(url) }.value
+            guard mode != .live, mode != .record, !isRecording, !isPreparingRecording else { return }
+            compositeLUT = lut
+        } catch {
+            assetImportError = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func restoreTakeLUT(_ lut: CompositeLUT) -> Bool {
+        guard canRestoreTakeScene, !isLoadingCompositeLUT else { return false }
+        compositeLUT = lut
+        return true
+    }
+
+    func clearCompositeLUT() {
+        guard mode != .live, mode != .record, !isRecording, !isPreparingRecording, !isLoadingCompositeLUT else { return }
+        compositeLUT = nil
+    }
     private(set) var scene = StudioScene.demo
     private(set) var cameraCalibration: CameraCalibration?
     private(set) var calibrationProfile: CalibrationProfile?
@@ -295,6 +322,7 @@ final class StudioModel {
         settings.chromaEnabled = chromaKeyEnabled; settings.greenThreshold = chromaGreenThreshold; settings.greenSoftness = chromaGreenSoftness
         settings.temporalMatteEnabled = temporalMatteEnabled; settings.temporalMatteStrength = temporalMatteStrength
         settings.depthPreviewFarMeters = depthPreviewFarMeters
+        settings.compositeLUT = compositeLUT
         if let id = selectedSourceID,
            ClockFreshness.evaluate(lastAccepted: clockLastAccepted[id],now: DispatchTime.now().uptimeNanoseconds) == .current,
            let buffer = captureDepthBuffers[id], let packet = buffer.latest, let time = buffer.captureHostNanoseconds {
@@ -823,6 +851,9 @@ final class StudioModel {
                 source.onFrame = { [weak realtimeCore = self.realtimeCore] frame in
                     realtimeCore?.ingest(frame, from: sourceID)
                 }
+                source.onInputLoss = { [weak realtimeCore = self.realtimeCore] event in
+                    realtimeCore?.latestVideoFrame.observeLocalInputLoss(event, sourceID: sourceID)
+                }
                 try self.realtimeCore.attach(source)
                 self.deviceRegistry.updateState(for: source.descriptor.id, to: .connected)
                 if self.selectedSourceID == nil { self.selectSource(sourceID) }
@@ -834,6 +865,12 @@ final class StudioModel {
     }
 
     func refreshMetrics() {
+        let now = DispatchTime.now().uptimeNanoseconds
+        if isRecording, let id = selectedSourceID {
+            realtimeCore.latestVideoFrame.observeRecordingClock(sourceID: id,
+                freshness: .evaluate(lastAccepted: clockLastAccepted[id], now: now),
+                uncertaintyMilliseconds: clockStatistics[id].map { ($0.roundTripNanoseconds / 2 + $0.jitterNanoseconds) / 1_000_000 })
+        }
         if let health = realtimeCore.latestVideoFrame.recordingHealth {
             recordingDroppedFrames = health.dropped
             recordingWriteDelayed = health.writeDelayed
@@ -845,7 +882,6 @@ final class StudioModel {
         }
         if realtimeCore.latestVideoFrame.recordingFailed { finishCameraRecording() }
         realtimeCore.metrics.sampleMemory()
-        let now = DispatchTime.now().uptimeNanoseconds
         for id in Array(mediaControls.keys) { mediaControls[id]?.expire(now: now) }
         nodeMonitoring = monitoringSnapshots(now: now)
         if let id = selectedTrackingNodeID {
@@ -919,7 +955,7 @@ final class StudioModel {
         }
     }
 
-    func takeSnapshotRequest() throws -> TakeSnapshotRequest {
+    func takeSnapshotRequest(recordingSourceID: UUID? = nil) throws -> TakeSnapshotRequest {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -940,7 +976,8 @@ final class StudioModel {
                 role: device.role.rawValue, connection: connection)
         }.sorted { $0.id.uuidString < $1.id.uuidString }
         let provenance = TakeProvenance(kind: .configurationSnapshot, software: .current, devices: devices,
-            calibration: profile.map { .init(id: $0.id, revision: $0.revision, cameraID: $0.cameraID, relativePath: "calibration.json") })
+            calibration: profile.map { .init(id: $0.id, revision: $0.revision, cameraID: $0.cameraID, relativePath: "calibration.json") },
+            plugins: recordingSourceID.map { realtimeCore.recordingPlugins(for: $0) })
         let manifest = TakeManifest(id: UUID(), name: "VPX Snapshot", createdAt: Date(), configuration: projectConfiguration,
             assets: assets, provenance: provenance)
         try manifest.validate()

@@ -17,11 +17,18 @@ struct TakeAuxiliaryFrame: Sendable {
         }
     }
 
+    struct ColorConversion: Codable, Sendable {
+        let requested: SDRInputEncoding
+        let applied: SDRInputEncoding?
+    }
+
     let sourceID: UUID?
     let inputSequence: UInt64?
     let inputHostSeconds: Double?
     let depth: DepthPreviewInput?
     let pose: Pose?
+    var colorConversion: ColorConversion?
+    var lut: CompositeLUT.Usage?
 }
 
 struct TakeMatteCopy: @unchecked Sendable {
@@ -60,6 +67,8 @@ final class TakeAuxiliaryTracks {
         let matteHeight: Int?
         let depth: Depth?
         let pose: TakeAuxiliaryFrame.Pose?
+        var colorConversion: TakeAuxiliaryFrame.ColorConversion?
+        var lut: CompositeLUT.Usage?
     }
 
     private let directory: URL
@@ -118,7 +127,8 @@ final class TakeAuxiliaryTracks {
         }
         let row = Row(frameIndex: index, ptsValue: time.value, ptsTimescale: time.timescale,
             sourceID: frame?.sourceID, inputSequence: frame?.inputSequence, inputHostSeconds: frame?.inputHostSeconds,
-            matte: matteRange, matteWidth: matte?.width, matteHeight: matte?.height, depth: depth, pose: frame?.pose)
+            matte: matteRange, matteWidth: matte?.width, matteHeight: matte?.height, depth: depth, pose: frame?.pose,
+            colorConversion: frame?.colorConversion, lut: frame?.lut)
         var line = try encoder.encode(row)
         line.append(0x0A)
         _ = try write(line, to: "frames.jsonl")

@@ -16,7 +16,15 @@ final class CameraTakeRecorder: @unchecked Sendable {
         var encodedBitDepth: Int?
         var audioBuffers: Int?
         var audioDropped: Int?
+        var inputSequenceGaps: UInt64?
+        var clock: TakeProvenance.Recording.ClockCoverage?
+        var localInputLoss: TakeProvenance.Recording.LocalInputLoss?
     }
+
+    private var lutUsage: [CompositeLUT.Usage] = []
+    private var requestedColorEncodings: Set<SDRInputEncoding> = []
+    private var appliedColorEncodings: Set<SDRInputEncoding> = []
+    private var poseCoverage = TakeProvenance.Recording.PoseCoverage()
 
     private struct Sample: @unchecked Sendable {
         let buffer: CVPixelBuffer
@@ -30,6 +38,10 @@ final class CameraTakeRecorder: @unchecked Sendable {
     private let slots = DispatchSemaphore(value: 4)
     private var accepting = true
     private var overflow = 0
+    private var inputSequenceHighWater: UInt64?
+    private var inputSequenceGaps: UInt64?
+    private var clockCoverage: TakeProvenance.Recording.ClockCoverage?
+    private var localInputLoss: TakeProvenance.Recording.LocalInputLoss?
     private var writerDrops = 0
     private var lowStorage = false
     private var lastStorageCheck: UInt64 = 0
@@ -129,6 +141,7 @@ final class CameraTakeRecorder: @unchecked Sendable {
     private var movieName: String { composite ? "composite.mov" : "camera.mov" }
     private let auxiliaryTracks: TakeAuxiliaryTracks?
     private let sceneSnapshot: TakeSceneSnapshot?
+    private let compositeLUT: CompositeLUT?
     private let request: TakeSnapshotRequest
     private let parent: URL
     private let scoped: Bool
@@ -136,7 +149,8 @@ final class CameraTakeRecorder: @unchecked Sendable {
     private let destination: URL
 
     init(request: TakeSnapshotRequest, parent: URL, sourceID: UUID, composite: Bool = false, preserve10Bit: Bool = false,
-         sceneSnapshot: TakeSceneSnapshot? = nil) throws {
+         sceneSnapshot: TakeSceneSnapshot? = nil, compositeLUT: CompositeLUT? = nil) throws {
+        self.compositeLUT = compositeLUT
         self.sceneSnapshot = sceneSnapshot
         self.preserve10Bit = preserve10Bit
         self.composite = composite
@@ -165,6 +179,44 @@ final class CameraTakeRecorder: @unchecked Sendable {
     }
 
     func dropVideoFrame() { lock.withLock { if accepting { overflow += 1 } } }
+
+    // Called by the selected capture mailbox before any recorder or renderer drops.
+    func observeInputSequence(_ sequence: UInt64) {
+        lock.withLock {
+            guard accepting, !failed, !lowStorage else { return }
+            if let previous = inputSequenceHighWater {
+                guard sequence > previous else { return }
+                let total = (inputSequenceGaps ?? 0).addingReportingOverflow(sequence - previous - 1)
+                inputSequenceGaps = total.overflow ? UInt64.max : total.partialValue
+            }
+            inputSequenceHighWater = sequence
+        }
+    }
+
+    func resetInputSequenceBaseline() {
+        lock.withLock { inputSequenceHighWater = nil }
+    }
+
+    func startLocalInputLossMonitoring() {
+        lock.withLock {
+            if accepting, localInputLoss == nil { localInputLoss = .init() }
+        }
+    }
+
+    func observeLocalInputLoss(_ event: TakeProvenance.Recording.LocalInputLoss.Event) {
+        lock.withLock {
+            guard accepting, !failed, !lowStorage else { return }
+            localInputLoss?.record(event)
+        }
+    }
+
+    func observeClock(_ freshness: ClockFreshness, uncertaintyMilliseconds: Double?) {
+        lock.withLock {
+            guard accepting, !failed, !lowStorage else { return }
+            if clockCoverage == nil { clockCoverage = .init() }
+            clockCoverage?.record(freshness, uncertaintyMilliseconds: uncertaintyMilliseconds)
+        }
+    }
 
     func submit(_ frame: VideoFrame) {
         submitVideo(frame.pixelBuffer, at: frame.hostReceiveTime)
@@ -250,6 +302,14 @@ final class CameraTakeRecorder: @unchecked Sendable {
             throw writer.error ?? Failure.writerFailed
         }
         try auxiliaryTracks?.append(frame: sample.auxiliary, matte: sample.matte, index: stats.frames, time: pts)
+        if composite {
+            poseCoverage.record(sample.auxiliary?.pose?.mode)
+            if let lut = sample.auxiliary?.lut, !lutUsage.contains(lut) { lutUsage.append(lut) }
+            if let color = sample.auxiliary?.colorConversion {
+                requestedColorEncodings.insert(color.requested)
+                if let applied = color.applied { appliedColorEncodings.insert(applied) }
+            }
+        }
         last = sample.time; stats.frames += 1
     }
 
@@ -297,9 +357,15 @@ final class CameraTakeRecorder: @unchecked Sendable {
             lock.withLock {
                 guard accepting else { continuation.resume(throwing: Failure.writerFailed); return }
                 accepting = false
+                let inputGaps = inputSequenceGaps
+                let clock = clockCoverage
+                let localLoss = localInputLoss
                 let dropped = overflow
                 let audioDropped = audioOverflow
                 queue.async { [self] in
+                    stats.inputSequenceGaps = inputGaps
+                    stats.clock = clock
+                    stats.localInputLoss = localLoss
                     stats.dropped += dropped
                     stats.audioDropped? += audioDropped
                     if let failure { continuation.resume(throwing: failure); return }
@@ -364,13 +430,31 @@ final class CameraTakeRecorder: @unchecked Sendable {
         var manifest = request.manifest
         guard let provenance = manifest.provenance else { throw Failure.writerFailed }
         manifest.name = "VPX Take"
-        manifest.provenance = .init(kind: .recording, software: provenance.software, devices: provenance.devices, calibration: provenance.calibration)
+        manifest.provenance = .init(kind: .recording, software: provenance.software, devices: provenance.devices,
+            calibration: provenance.calibration,
+            recording: .init(sourceID: stats.sourceID, width: stats.width, height: stats.height,
+                             writerPixelFormat: stats.pixelFormat, encodedBitDepth: stats.encodedBitDepth,
+                             writtenFrames: stats.frames, recorderDrops: stats.dropped,
+                             pose: composite ? poseCoverage : nil, inputSequenceGaps: stats.inputSequenceGaps, clock: stats.clock,
+                             localInputLoss: stats.localInputLoss,
+                             colorConversion: requestedColorEncodings.isEmpty ? nil : .init(
+                                 requested: SDRInputEncoding.allCases.filter { requestedColorEncodings.contains($0) },
+                                 applied: SDRInputEncoding.allCases.filter { appliedColorEncodings.contains($0) }),
+                             lutUsage: lutUsage.isEmpty ? nil : lutUsage),
+            plugins: provenance.plugins)
         manifest.assets += [.init(role: composite ? .composite : .camera, relativePath: movieName), .init(role: .diagnostics, relativePath: "recording.json")]
         manifest.assets += try auxiliaryTracks?.close() ?? []
         if let sceneSnapshot {
             let path = "scene.vpx.json"
             try JSONEncoder().encode(sceneSnapshot).write(to: staging.appendingPathComponent(path))
             manifest.assets.append(.init(role: .scene, relativePath: path))
+        }
+        let appliedLUTs = Set(lutUsage.filter(\.applied).compactMap(\.reference))
+        if !appliedLUTs.isEmpty {
+            guard let compositeLUT, appliedLUTs == [compositeLUT.reference] else { throw Failure.writerFailed }
+            let path = CompositeLUT.takeAssetPath
+            try compositeLUT.originalBytes.write(to: staging.appendingPathComponent(path), options: .withoutOverwriting)
+            manifest.assets.append(.init(role: .lut, relativePath: path, sha256: compositeLUT.reference.sha256))
         }
         try manifest.sealAssets(in: staging)
         try manifest.save(to: staging)

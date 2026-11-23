@@ -20,6 +20,9 @@ kernel void normalizeCamera(texture2d<float,access::sample> first [[texture(0)]]
     float p1=p.distortion.w, p2=p.options.x;
     float2 distorted = xy*radial + float2(2*p1*xy.x*xy.y+p2*(r2+2*xy.x*xy.x), p1*(r2+2*xy.y*xy.y)+2*p2*xy.x*xy.y);
     float2 sampleUV = p.intrinsics.xy + distorted*p.intrinsics.zw;
+    bool leftHalf = uv.x < 0.5;
+    // Lens comparison isolates the geometry while preserving identical color conversion.
+    if (p.matrix.w == 1 && leftHalf) sampleUV = uv;
     float3 rgb = first.sample(s,sampleUV).rgb;
     if (p.options.w > 0.5) {
         float y = (rgb.r*p.matrix.z-p.range.x)*p.range.y;
@@ -29,7 +32,10 @@ kernel void normalizeCamera(texture2d<float,access::sample> first [[texture(0)]]
             y-2*kb*(1-kb)/kg*cbcr.x-2*kr*(1-kr)/kg*cbcr.y, y+2*(1-kb)*cbcr.x);
     }
     bool inBounds = all(sampleUV >= 0.0) && all(sampleUV <= 1.0);
-    output.write(float4(decodeSDR(rgb,uint(p.options.y)), p.options.z*(inBounds ? 1.0 : 0.0)),gid);
+    // Present the input RGB code values on the left of the color comparison
+    // by compensating for the preview's sRGB output transfer.
+    uint transfer = p.matrix.w == 2 && leftHalf ? 1 : uint(p.options.y);
+    output.write(float4(decodeSDR(rgb,transfer), p.options.z*(inBounds ? 1.0 : 0.0)),gid);
 }
 kernel void buildMatte(texture2d<float,access::read> video [[texture(0)]],
     texture2d<float,access::write> matte [[texture(1)]],
@@ -98,7 +104,9 @@ vertex QuadOutput studioQuad(uint id [[vertex_id]]) {
 fragment float4 studioComposite(QuadOutput in [[stage_in]], texture2d<float> scene [[texture(0)]],
     texture2d<float> video [[texture(1)]], texture2d<float> matte [[texture(2)]],
     texture2d<float,access::read> depth [[texture(3)]], texture2d<uint,access::read> confidence [[texture(4)]],
-    constant float4& options [[buffer(0)]], constant float4& depthParameters [[buffer(1)]]) {
+    texture3d<float> lut [[texture(5)]], constant float4& options [[buffer(0)]],
+    constant float4& depthParameters [[buffer(1)]], constant float4& lutMin [[buffer(2)]],
+    constant float4& lutMax [[buffer(3)]]) {
     constexpr sampler s(filter::linear,address::clamp_to_edge);
     if (options.x == 4 || options.x == 5) {
         if (options.w < 0.5) return float4(0.015,0.015,0.015,1);
@@ -124,9 +132,19 @@ fragment float4 studioComposite(QuadOutput in [[stage_in]], texture2d<float> sce
     if (options.x == 1) return float4(clamp(background,0.0,1.0),1);
     if (options.x == 2) return float4(clamp(foreground,0.0,1.0),1);
     if (options.x == 3) return float4(float3(alpha),1);
+    if (options.x == 6 || options.x == 7) {
+        float valid = video.sample(s,in.uv).a;
+        return float4(clamp(foreground,0.0,1.0)*valid,1);
+    }
     foreground.g=mix(foreground.g,min(foreground.g,max(foreground.r,foreground.b)),(1-alpha)*options.z);
     // Linear Rec.709/sRGB primaries; the sRGB render target performs the output transfer once.
-    return float4(clamp(foreground*alpha+background*(1-alpha),0.0,1.0),1);
+    float3 composite = foreground*alpha+background*(1-alpha);
+    if (depthParameters.z > 0.5) {
+        float side = float(lut.get_width());
+        float3 coordinate = clamp((composite-lutMin.xyz)/(lutMax.xyz-lutMin.xyz),0.0,1.0);
+        composite = lut.sample(s,(coordinate*(side-1.0)+0.5)/side).rgb;
+    }
+    return float4(clamp(composite,0.0,1.0),1);
 }
 
 // A thread writes one 2×2 block to video-range, MSB-aligned 10-bit 4:2:0.

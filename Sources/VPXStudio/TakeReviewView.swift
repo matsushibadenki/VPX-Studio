@@ -34,10 +34,14 @@ struct TakeReviewView: View {
                     .disabled(!canRestoreSelection || assetRestoreTask != nil)
                     .help(localization.text(.restoreTakeScene))
                     .accessibilityLabel(localization.text(.restoreTakeScene))
-                Button { restoreSelectedAsset(calibration: true) } label: { Image(systemName: "camera.aperture") }
+                Button { restoreSelectedAsset(role: .calibration) } label: { Image(systemName: "camera.aperture") }
                     .disabled(!canRestoreCalibration || assetRestoreTask != nil)
                     .help(localization.text(.restoreTakeCalibration))
                     .accessibilityLabel(localization.text(.restoreTakeCalibration))
+                Button { restoreSelectedAsset(role: .lut) } label: { Image(systemName: "circle.lefthalf.filled") }
+                    .disabled(!canRestoreLUT || assetRestoreTask != nil)
+                    .help(localization.text(.restoreTakeLUT))
+                    .accessibilityLabel(localization.text(.restoreTakeLUT))
                 Button { saveSnapshot() } label: { Image(systemName: "square.and.arrow.down") }
                     .disabled(review.isLoading)
                     .help(localization.text(.saveTakeSnapshot)).accessibilityLabel(localization.text(.saveTakeSnapshot))
@@ -89,6 +93,74 @@ struct TakeReviewView: View {
                             Image(systemName: "camera.aperture").help("\(calibration.id.uuidString) · r\(calibration.revision)")
                         }
                     }.font(.caption).foregroundStyle(.secondary)
+                    if provenance.kind == .recording {
+                        if let plugins = provenance.plugins, !plugins.isEmpty {
+                            let names = plugins.map { "\($0.name) \($0.version)" }.joined(separator: " · ")
+                            Label(names, systemImage: "puzzlepiece.extension")
+                                .lineLimit(1).help(names)
+                                .accessibilityLabel("\(localization.text(.takePlugins)): \(names)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Label(localization.text(provenance.plugins == nil ? .takePluginsUnknown : .takePluginsNone),
+                                  systemImage: "puzzlepiece.extension")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let recording = provenance.recording {
+                        HStack {
+                            Label("\(recording.width) × \(recording.height)", systemImage: "film")
+                            Text("\(localization.text(.takeWrittenFrames)): \(recording.writtenFrames)")
+                            Text("\(localization.text(.takeRecorderDrops)): \(recording.recorderDrops)")
+                                .help(localization.text(.recordingDrops))
+                            if let gaps = recording.inputSequenceGaps {
+                                Text("\(localization.text(.takeInputSequenceGaps)): \(gaps)")
+                                    .help(localization.text(.takeInputSequenceGapsHelp))
+                            }
+                            if let pose = recording.pose {
+                                Text("\(localization.text(.poseAlignment)): \(recording.writtenFrames - pose.missing)/\(recording.writtenFrames)")
+                            }
+                        }
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        if let usages = recording.lutUsage {
+                            DisclosureGroup("LUT") {
+                                ForEach(usages, id: \.self) { usage in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(usage.reference?.name ?? "LUT") · \(localization.text(usage.applied ? .takeLUTApplied : .takeLUTNotApplied))")
+                                        if let hash = usage.reference?.sha256 {
+                                            Text("SHA-256 \(hash)").monospaced().textSelection(.enabled)
+                                        }
+                                    }
+                                }
+                            }.font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let color = recording.colorConversion {
+                            let policy = color.requested.map { $0.displayName(localization) }.joined(separator: " / ")
+                            let applied = color.applied.map { $0.displayName(localization) }.joined(separator: " / ")
+                            Label("\(localization.text(.takeColorPolicy)) \(policy) · \(localization.text(.takeColorApplied)) \(applied.isEmpty ? "—" : applied)",
+                                  systemImage: "circle.lefthalf.filled")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let loss = recording.localInputLoss {
+                            HStack {
+                                Label("\(localization.text(.takeLocalInputDrops)) \(loss.droppedFrames)", systemImage: "video.slash")
+                                Text("\(localization.text(.takeLocalDiscontinuities)) \(loss.discontinuities)")
+                                if loss.unknownReasonEvents > 0 {
+                                    Text("\(localization.text(.takeLocalUnknownLoss)) \(loss.unknownReasonEvents)")
+                                }
+                            }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        if let clock = recording.clock {
+                            HStack {
+                                Label(localization.text(.takeClockSamples), systemImage: "clock")
+                                Text("\(localization.text(.takeClockCurrent)) \(clock.current)")
+                                Text("\(localization.text(.takeClockStale)) \(clock.stale)")
+                                Text("\(localization.text(.takeClockUnmeasured)) \(clock.unmeasured)")
+                                if let peak = clock.peakUncertaintyMilliseconds {
+                                    Text("\(localization.text(.takeClockPeak)) \(peak, specifier: "%.2f") ms")
+                                }
+                            }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    }
                 } else {
                     Text(localization.text(.takeProvenanceUnknown)).font(.caption).foregroundStyle(.secondary)
                 }
@@ -170,27 +242,47 @@ struct TakeReviewView: View {
         return snapshot.results.contains { $0.relativePath == reference.relativePath && $0.status == .verified }
     }
 
-    private func restoreSelectedAsset(calibration: Bool = false) {
-        guard (calibration ? canRestoreCalibration : canRestoreSelection), let directory = review.directory, let snapshot = review.snapshot,
+    private var canRestoreLUT: Bool {
+        guard studio.canRestoreTakeScene, !studio.isLoadingCompositeLUT, !review.isLoading,
+              let snapshot = review.snapshot, let path = selectedPlaybackPath else { return false }
+        return snapshot.manifest.assets.contains { $0.role == .lut && $0.relativePath == path }
+            && snapshot.results.contains { $0.relativePath == path && $0.status == .verified }
+    }
+
+    private func restoreSelectedAsset(role: TakeManifest.Asset.Role = .scene) {
+        let allowed = switch role {
+        case .scene: canRestoreSelection
+        case .calibration: canRestoreCalibration
+        case .lut: canRestoreLUT
+        default: false
+        }
+        guard allowed, let directory = review.directory, let snapshot = review.snapshot,
               let path = selectedPlaybackPath else { return }
         assetRestoreError = nil
         assetRestoreTask = Task {
             defer { if !Task.isCancelled { assetRestoreTask = nil } }
             do {
                 let service = TakeReviewService()
-                if calibration {
+                switch role {
+                case .calibration:
                     let profile = try await service.restoreCalibration(directory: directory,
                         manifest: snapshot.manifest, relativePath: path)
                     try Task.checkCancellation()
                     guard review.snapshot?.manifest == snapshot.manifest, review.directory == directory else { return }
                     try studio.restoreTakeCalibration(profile)
                     dismiss()
-                } else {
+                case .lut:
+                    let lut = try await service.restoreLUT(directory: directory, manifest: snapshot.manifest, relativePath: path)
+                    try Task.checkCancellation()
+                    guard review.snapshot?.manifest == snapshot.manifest, review.directory == directory else { return }
+                    if studio.restoreTakeLUT(lut) { dismiss() }
+                case .scene:
                     let scene = try await service.restoreScene(directory: directory,
                         manifest: snapshot.manifest, relativePath: path)
                     try Task.checkCancellation()
                     guard review.snapshot?.manifest == snapshot.manifest, review.directory == directory else { return }
                     if studio.restoreTakeScene(scene) { dismiss() }
+                default: break
                 }
             } catch {
                 if !Task.isCancelled { assetRestoreError = String(describing: error) }
@@ -247,6 +339,7 @@ struct TakeReviewView: View {
         case .calibration: .calibrate
         case .scene: .scenePass
         case .color: .inputColor
+        case .lut: .takeLUTAsset
         case .diagnostics: .diagnosticsHistory
         }
     }

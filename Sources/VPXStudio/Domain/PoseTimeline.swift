@@ -99,6 +99,22 @@ struct PoseAlignmentTelemetry: Codable, Sendable {
     let predictionErrorMeters: Float?
     let predictionErrorRadians: Float?
     let predictionErrorHorizonMilliseconds: Double?
+    var preview: Preview?
+
+    struct Preview: Codable, Sendable {
+        let sourceID: UUID
+        let frameIdentifier: UInt64
+        let positionMeters: SIMD3<Float>
+        let orientationXYZW: SIMD4<Float>
+
+        init(sourceID: UUID, frameIdentifier: UInt64, transform: simd_float4x4) {
+            self.sourceID = sourceID
+            self.frameIdentifier = frameIdentifier
+            let translation = transform.columns.3
+            positionMeters = SIMD3(translation.x, translation.y, translation.z)
+            orientationXYZW = simd_normalize(simd_quatf(transform)).vector
+        }
+    }
 }
 
 extension PoseAlignmentTelemetry.Mode {

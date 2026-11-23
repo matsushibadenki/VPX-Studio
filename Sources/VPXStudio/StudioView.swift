@@ -246,6 +246,9 @@ struct StudioView: View {
                 .padding(12)
             VStack(alignment: .leading, spacing: 6) {
                 Text(String(format: "%.1f fps · GPU %.2f ms",studio.frameRate,studio.gpuFrameMilliseconds))
+                if studio.debugView == .pose && !isProduction {
+                    posePreviewOverlay
+                }
                 if studio.outputProtection != .normal {
                     Label(localization.text(studio.outputProtection.localizationKey),systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
@@ -256,6 +259,25 @@ struct StudioView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 0)
+    }
+
+    @ViewBuilder
+    private var posePreviewOverlay: some View {
+        if studio.outputProtection == .normal,
+           let alignment = studio.poseAlignmentTelemetry, let preview = alignment.preview,
+           preview.sourceID == studio.selectedSourceID {
+            let p = preview.positionMeters
+            let q = preview.orientationXYZW
+            Label(localization.text(alignment.mode.localizationKey), systemImage: "scope")
+            Text("\(localization.text(.posePreviewFrame)) \(preview.frameIdentifier)")
+            Text(String(format: "XYZ  %.3f  %.3f  %.3f m", p.x, p.y, p.z))
+            Text(String(format: "XYZW  %.3f  %.3f  %.3f  %.3f", q.x, q.y, q.z))
+            if alignment.mode == .predicted, let horizon = alignment.horizonMilliseconds {
+                Text("\(localization.text(.posePredictionHorizon)) \(horizon, specifier: "%.1f") ms")
+            }
+        } else {
+            Label(localization.text(.posePreviewUnavailable), systemImage: "scope")
+        }
     }
 
     private var inspector: some View {
@@ -272,6 +294,15 @@ struct StudioView: View {
                 Text("Rec.709").tag(SDRInputEncoding.rec709)
                 Text(localization.text(.linearInput)).tag(SDRInputEncoding.linear)
             }.disabled(isProduction)
+            HStack {
+                Button(localization.text(.loadCompositeLUT), systemImage: "circle.lefthalf.filled") { chooseCompositeLUT() }
+                if let lut = studio.compositeLUT {
+                    Text(lut.reference.name).lineLimit(1).help(lut.reference.name)
+                    Button(localization.text(.clearCompositeLUT), systemImage: "xmark.circle") { studio.clearCompositeLUT() }
+                        .labelStyle(.iconOnly).help(localization.text(.clearCompositeLUT))
+                }
+            }
+            .disabled(isProduction || studio.isPreparingRecording || studio.isLoadingCompositeLUT)
             Picker(localization.text(.debugPass), selection: $studio.debugView) {
                 Text(localization.text(.compositePass)).tag(CompositeDebugView.composite)
                 Text(localization.text(.scenePass)).tag(CompositeDebugView.scene)
@@ -279,11 +310,18 @@ struct StudioView: View {
                 Text(localization.text(.mattePass)).tag(CompositeDebugView.matte)
                 Text(localization.text(.depthPass)).tag(CompositeDebugView.depth)
                 Text(localization.text(.depthConfidencePass)).tag(CompositeDebugView.depthConfidence)
+                Text(localization.text(.lensComparisonPass)).tag(CompositeDebugView.lensCorrection)
+                Text(localization.text(.colorComparisonPass)).tag(CompositeDebugView.colorConversion)
+                Text(localization.text(.posePreviewPass)).tag(CompositeDebugView.pose)
             }
             .labelsHidden()
             .accessibilityLabel(localization.text(.debugPass))
             .help(localization.text(.debugPass))
             .disabled(isProduction)
+            if studio.debugView == .lensCorrection || studio.debugView == .colorConversion {
+                let help = localization.text(studio.debugView == .lensCorrection ? .lensComparisonHelp : .colorComparisonHelp)
+                Image(systemName: "info.circle").help(help).accessibilityLabel(help)
+            }
             if studio.debugView == .depth || studio.debugView == .depthConfidence {
                 HStack {
                     Image(systemName: "info.circle")
@@ -510,6 +548,18 @@ struct StudioView: View {
     }
 
     private var isProduction: Bool { studio.mode == .live || studio.mode == .record || studio.isRecording }
+
+    private func chooseCompositeLUT() {
+        let panel = NSOpenPanel()
+        panel.title = localization.text(.loadCompositeLUT)
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if let type = UTType(filenameExtension: "cube") { panel.allowedContentTypes = [type] }
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { await studio.loadCompositeLUT(from: url) }
+        }
+    }
 
     private func chooseAsset(isScene: Bool) {
         let panel = NSOpenPanel()

@@ -12,6 +12,15 @@ enum LiveQualityProfile: String, CaseIterable, Codable {
 
 enum SDRInputEncoding: String, CaseIterable, Codable {
     case automatic, sRGB, rec709, linear
+    @MainActor func displayName(_ localization: LocalizationStore) -> String {
+        switch self {
+        case .automatic: localization.text(.automaticInput)
+        case .sRGB: "sRGB"
+        case .rec709: "Rec.709"
+        case .linear: localization.text(.linearInput)
+        }
+    }
+
     var shaderCode: UInt32 { switch self { case .automatic: 0; case .sRGB: 1; case .rec709: 2; case .linear: 3 } }
     func resolved(for metadata: VideoColorMetadata) -> Self? {
         if self != .automatic { return self }
@@ -25,7 +34,9 @@ enum SDRInputEncoding: String, CaseIterable, Codable {
     }
 }
 
-enum CompositeDebugView: String, CaseIterable, Codable { case composite, scene, video, matte, depth, depthConfidence }
+enum CompositeDebugView: String, CaseIterable, Codable { case composite, scene, video, matte, depth, depthConfidence
+    case lensCorrection, colorConversion, pose
+}
 enum OutputProtection: String, Codable { case normal, inputLost, trackingLost, poseUnaligned, gpuOverload, unknownColor, unsupportedFormat }
 
 struct RenderConfiguration: Codable {

@@ -14,7 +14,7 @@ struct TakeManifest: Codable, Equatable, Sendable {
 
     struct Asset: Codable, Equatable, Sendable {
         enum Role: String, Codable, Sendable {
-            case camera, composite, audio, matte, depth, pose, calibration, scene, color, diagnostics
+            case camera, composite, audio, matte, depth, pose, calibration, scene, color, diagnostics, lut
         }
         var role: Role
         var relativePath: String
@@ -56,6 +56,15 @@ struct TakeManifest: Codable, Equatable, Sendable {
                 throw ValidationError.duplicatePath(path)
             }
         }
+        let luts = assets.filter { $0.role == .lut }
+        if !luts.isEmpty {
+            guard luts.count == 1, let lut = luts.first,
+                  lut.relativePath == CompositeLUT.takeAssetPath, let hash = lut.sha256,
+                  let provenance, provenance.kind == .recording,
+                  provenance.recording?.lutUsage?.contains(where: { $0.applied && $0.reference?.sha256 == hash }) == true else {
+                throw ValidationError.invalidProvenance
+            }
+        }
         if let provenance {
             guard schemaVersion >= 2 else { throw ValidationError.invalidProvenance }
             try provenance.validate(assets: assets)
@@ -84,7 +93,7 @@ struct TakeManifest: Codable, Equatable, Sendable {
         return inspected.url
     }
 
-    func verifiedAssetData(relativePath: String, role: Asset.Role, in directory: URL) throws -> Data {
+    func verifiedAssetData(relativePath: String, role: Asset.Role, in directory: URL, maximumSize: Int? = nil) throws -> Data {
         try validate()
         guard let asset = assets.first(where: { $0.relativePath == relativePath && $0.role == role }) else { throw PlaybackError.unsupportedRole }
         guard let expected = asset.sha256 else { throw PlaybackError.unverified }
@@ -94,6 +103,9 @@ struct TakeManifest: Codable, Equatable, Sendable {
         var data = Data()
         while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
             try Task.checkCancellation()
+            if let maximumSize, chunk.count > maximumSize - data.count {
+                throw ValidationError.unsafeAsset(relativePath)
+            }
             data.append(chunk)
         }
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()

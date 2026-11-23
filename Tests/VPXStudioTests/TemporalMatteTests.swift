@@ -75,6 +75,51 @@ final class TemporalMatteTests: XCTestCase {
         XCTAssertEqual(moved,raw)
         XCTAssertEqual(filtered.metrics.read().temporalMatteMode,.blend)
     }
+
+    func testNormalizationComparisonShowsDistinctHalvesAndIsBypassedInProduction() throws {
+        let harness = try MatteHarness(enabled: false)
+        let source = UUID()
+        harness.settings.chromaEnabled = false
+        harness.settings.debugView = .colorConversion
+        let left = try harness.render(sequence: 1, time: 1, source: source, red: 128, green: 128)
+        let right = try harness.render(sequence: 2, time: 1.02, source: source, red: 128, green: 128, x: 15)
+        XCTAssertEqual(Double(left), 55, accuracy: 1)
+        XCTAssertEqual(Double(right), 128, accuracy: 1)
+        harness.settings.protectMissingInput = true
+        let production = try harness.render(sequence: 3, time: 1.04, source: source, red: 128, green: 128)
+        XCTAssertEqual(Double(production), 128, accuracy: 1)
+        harness.settings.protectMissingInput = false
+        harness.settings.debugView = .lensCorrection
+        harness.settings.camera.lens.radialDistortionK1 = 1
+        let uncorrected = try harness.render(sequence: 4, time: 1.06, source: source, red: 128, green: 128)
+        let correctedOutside = try harness.render(sequence: 5, time: 1.08, source: source, red: 128, green: 128, x: 15)
+        XCTAssertEqual(Double(uncorrected), 128, accuracy: 1)
+        XCTAssertEqual(correctedOutside, 0)
+    }
+
+
+    func testCompositeLUTChangesMetalOutputAndBypassesDiagnosticVideo() throws {
+        let harness = try MatteHarness(enabled: false)
+        let source = UUID()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".cube")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let data = Data(("LUT_3D_SIZE 2\n" + String(repeating: "0.1 0.2 0.25\n", count: 8)).utf8)
+        try data.write(to: url)
+        let lut = try CompositeLUT.load(url)
+        XCTAssertEqual(lut.reference.name, url.lastPathComponent)
+        XCTAssertTrue(lut.reference.isValid)
+        harness.settings.compositeLUT = lut
+        harness.settings.chromaEnabled = false
+        harness.settings.debugView = .composite
+        let graded = try harness.render(sequence: 1, time: 1, source: source, red: 128, green: 128)
+        XCTAssertEqual(Double(graded), 64, accuracy: 1)
+        harness.settings.debugView = .video
+        let diagnostic = try harness.render(sequence: 2, time: 1.02, source: source, red: 128, green: 128)
+        XCTAssertEqual(Double(diagnostic), 128, accuracy: 1)
+        try Data("LUT_3D_SIZE 2\n0 0 0\n".utf8).write(to: url)
+        XCTAssertThrowsError(try CompositeLUT.load(url))
+    }
+
 }
 
 private final class MatteHarness {
@@ -91,7 +136,7 @@ private final class MatteHarness {
         settings.chromaEnabled = true; settings.temporalMatteEnabled = enabled
         settings.inputEncoding = .linear; settings.debugView = .matte; settings.profile = .reviewCinema
     }
-    func render(sequence: UInt64, time: Double, source: UUID, red: UInt8, green: UInt8) throws -> Int {
+    func render(sequence: UInt64, time: Double, source: UUID, red: UInt8, green: UInt8, x: Int = 0) throws -> Int {
         var optionalBuffer: CVPixelBuffer?
         XCTAssertEqual(CVPixelBufferCreate(nil,16,16,kCVPixelFormatType_32BGRA,
             [kCVPixelBufferMetalCompatibilityKey: true,kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,&optionalBuffer),kCVReturnSuccess)
@@ -113,6 +158,6 @@ private final class MatteHarness {
         XCTAssertEqual(metrics.read().protection,.normal)
         var bytes = [UInt8](repeating: 0,count: 16*16*4)
         bytes.withUnsafeMutableBytes { target.getBytes($0.baseAddress!,bytesPerRow: 16*4,from: MTLRegionMake2D(0,0,16,16),mipmapLevel: 0) }
-        return Int(bytes[0])
+        return Int(bytes[x * 4])
     }
 }

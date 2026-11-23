@@ -12,6 +12,13 @@ enum LocalizationKey: String {
     case recordCompositeAudio
     case recordCamera, finalizingTake, recordingFailed, takeSaved
     case playTakeAsset, takePreparingPlayback, takePlaybackFailed
+    case takeLocalInputDrops, takeLocalDiscontinuities, takeLocalUnknownLoss
+    case takeClockSamples, takeClockCurrent, takeClockStale, takeClockUnmeasured, takeClockPeak
+    case takeLUTAsset, restoreTakeLUT
+    case loadCompositeLUT, clearCompositeLUT, takeLUTApplied, takeLUTNotApplied
+    case takeColorPolicy, takeColorApplied
+    case takePlugins, takePluginsNone, takePluginsUnknown
+    case takeWrittenFrames, takeRecorderDrops, takeInputSequenceGaps, takeInputSequenceGapsHelp
     case saveTakeSnapshot, takeConfigurationSnapshot, takeDevices, takeProvenanceUnknown
     case takeIntegrity, openTake, recheckTake, takeChecking, takeReadFailed, takeIntegrityFailed
     case takeVerified, takeUnverified, takeMissing, takeModified, takeUnreadable
@@ -24,8 +31,10 @@ enum LocalizationKey: String {
     case calibrationExtrinsicsMissing, checkerboardIntrinsicRMSE, checkerboardViewCount
     case checkerboardIntrinsicsExpired
     case solveCheckerboard, checkerboardHelp, checkerboardSolving, checkerboardInvalid, checkerboardIntrinsicsMismatch, checkerboardDegenerate, checkerboardResidualRejected, checkerboardMaximumResidual, checkerboardMeasured
+    case lensComparisonPass, lensComparisonHelp, colorComparisonPass, colorComparisonHelp
     case depthPass, depthConfidencePass, depthPreviewHelp, depthPreviewFar, depthPreviewMissing, depthPreviewAge
     case temporalMatte, temporalMatteHelp, temporalMatteStrength, temporalMatteDisabled, temporalMatteReset, temporalMatteBlend, temporalMatteReuse
+    case posePreviewPass, posePreviewUnavailable, posePreviewFrame
     case poseAlignment, poseAlignmentUnavailable, poseMeasured, poseInterpolated, posePredicted, posePredictionHorizon, posePredictionPositionError, posePredictionRotationError
     case registerStage, registerStageHelp, stageRegistrationMissing, saveCalibration, stageAnchoredAt
     case poseRejected, poseMalformed, poseUnavailable, poseReordered, poseMotionRejected, poseReacquiring

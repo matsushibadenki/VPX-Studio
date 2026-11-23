@@ -24,6 +24,7 @@ enum VideoSourceError: LocalizedError {
 final class MacCameraVideoSource: NSObject, VideoSource {
     let descriptor: DeviceDescriptor
     var onFrame: ((VideoFrame) -> Void)?
+    var onInputLoss: ((TakeProvenance.Recording.LocalInputLoss.Event) -> Void)?
 
     private let captureSession = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
@@ -79,6 +80,19 @@ final class MacCameraVideoSource: NSObject, VideoSource {
 }
 
 extension MacCameraVideoSource: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let reason = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_DroppedFrameReason,
+                                     attachmentModeOut: nil) as? String
+        if reason == (kCMSampleBufferDroppedFrameReason_FrameWasLate as String)
+            || reason == (kCMSampleBufferDroppedFrameReason_OutOfBuffers as String) {
+            onInputLoss?(.droppedFrame)
+        } else if reason == (kCMSampleBufferDroppedFrameReason_Discontinuity as String) {
+            onInputLoss?(.discontinuity)
+        } else {
+            onInputLoss?(.unknownReason)
+        }
+    }
+
     func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,

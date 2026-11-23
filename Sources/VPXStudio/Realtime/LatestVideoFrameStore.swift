@@ -11,9 +11,10 @@ final class LatestVideoFrameStore {
     private var sessions: [UUID: UUID] = [:]
     private var recording: (sourceID: UUID, sessionID: UUID?, recorder: CameraTakeRecorder)?
 
-    func startRecording(_ recorder: CameraTakeRecorder, sourceID: UUID) -> Bool {
+    func startRecording(_ recorder: CameraTakeRecorder, sourceID: UUID, tracksLocalInputLoss: Bool = false) -> Bool {
         lock.withLock {
             guard recording == nil, selectedSourceID == sourceID else { return false }
+            if tracksLocalInputLoss, sessions[sourceID] == nil { recorder.startLocalInputLossMonitoring() }
             recording = (sourceID, sessions[sourceID], recorder)
             return true
         }
@@ -28,6 +29,22 @@ final class LatestVideoFrameStore {
 
     var recordingHealth: CameraTakeRecorder.Health? {
         lock.withLock { recording?.recorder.health }
+    }
+
+    func observeLocalInputLoss(_ event: TakeProvenance.Recording.LocalInputLoss.Event, sourceID: UUID) {
+        lock.withLock {
+            guard selectedSourceID == sourceID, let recording, recording.sourceID == sourceID,
+                  recording.sessionID == nil, sessions[sourceID] == nil else { return }
+            recording.recorder.observeLocalInputLoss(event)
+        }
+    }
+
+    func observeRecordingClock(sourceID: UUID, freshness: ClockFreshness, uncertaintyMilliseconds: Double?) {
+        lock.withLock {
+            guard let recording, recording.sourceID == sourceID, recording.sessionID != nil else { return }
+            let status = sessions[sourceID] == nil ? .unmeasured : freshness
+            recording.recorder.observeClock(status, uncertaintyMilliseconds: uncertaintyMilliseconds)
+        }
     }
 
     var recordingFailed: Bool { lock.withLock { recording?.recorder.hasFailed == true } }
@@ -45,7 +62,8 @@ final class LatestVideoFrameStore {
     func setSuspended(_ suspended: Bool, sourceID: UUID, sessionID: UUID) {
         lock.withLock {
             guard sessions[sourceID] == sessionID else { return }
-            if suspended { suspendedSources.insert(sourceID) } else { suspendedSources.remove(sourceID) }
+            let changed = suspended ? suspendedSources.insert(sourceID).inserted : suspendedSources.remove(sourceID) != nil
+            if changed, recording?.sourceID == sourceID { recording?.recorder.resetInputSequenceBaseline() }
             if selectedSourceID == sourceID { latest = nil }
         }
     }
@@ -56,6 +74,7 @@ final class LatestVideoFrameStore {
         lock.withLock {
             sessions[sourceID] = sessionID
             suspendedSources.remove(sourceID)
+            if recording?.sourceID == sourceID { recording?.recorder.resetInputSequenceBaseline() }
             if selectedSourceID == sourceID { latest = nil }
         }
     }
@@ -65,6 +84,7 @@ final class LatestVideoFrameStore {
             guard sessions[sourceID] == sessionID else { return }
             sessions.removeValue(forKey: sourceID)
             suspendedSources.remove(sourceID)
+            if recording?.sourceID == sourceID { recording?.recorder.resetInputSequenceBaseline() }
             if selectedSourceID == sourceID { latest = nil }
         }
     }
@@ -84,8 +104,10 @@ final class LatestVideoFrameStore {
         guard sessions[sourceID] == sessionID else { return }
         guard !suspendedSources.contains(sourceID) else { return }
         latest = frame
-        if let recording, !recording.recorder.composite, recording.sourceID == sourceID, recording.sessionID == sessionID {
-            recording.recorder.submit(frame)
+        if let recording, recording.sourceID == sourceID,
+           recording.recorder.composite || recording.sessionID == sessionID {
+            if sessionID != nil { recording.recorder.observeInputSequence(frame.identifier) }
+            if !recording.recorder.composite { recording.recorder.submit(frame) }
         }
     }
 
