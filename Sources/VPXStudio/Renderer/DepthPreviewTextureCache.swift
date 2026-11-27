@@ -7,6 +7,17 @@ struct DepthPreviewInput: Sendable {
     let packet: CaptureDepthPacket
     let capturedHostSeconds: Double
 
+    /// A temporal prerequisite only. Depth still needs a verified pixel-space mapping.
+    func matchesARKitFrame(sourceID: UUID?, sequence: UInt64, captureNanoseconds: UInt64?, now: Double) -> Bool {
+        isCurrent(sourceID: sourceID, now: now) &&
+            packet.header.sequence == sequence && captureNanoseconds == packet.header.captureTimeNanoseconds
+    }
+
+    func matchesVideoAspect(width: Int, height: Int) -> Bool {
+        guard width > 0, height > 0 else { return false }
+        return Double(width) * Double(packet.header.height) == Double(height) * Double(packet.header.width)
+    }
+
     func isCurrent(sourceID: UUID?, now: Double) -> Bool {
         self.sourceID == sourceID && now.isFinite && now >= 0 && capturedHostSeconds.isFinite && capturedHostSeconds >= 0 &&
             now-capturedHostSeconds >= -0.05 && now-capturedHostSeconds <= 0.5
@@ -18,6 +29,7 @@ struct DepthPreviewTelemetry: Codable, Sendable {
     let width: Int?
     let height: Int?
     let ageMilliseconds: Double?
+    var sameARKitFrame: Bool?
 }
 
 /// Uploads only new depth packets. Each pair is immutable after upload so an

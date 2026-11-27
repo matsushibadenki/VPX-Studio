@@ -77,7 +77,7 @@ final class CameraTakeRecorder: @unchecked Sendable {
         let now = DispatchTime.now().uptimeNanoseconds
         if now - lastStorageCheck >= 1_000_000_000 {
             lastStorageCheck = now
-            let files = [movieName, "matte.f16le", "depth.bin", "frames.jsonl"]
+            let files = [movieName, "matte.f16le", "depth.bin", "frames.jsonl", TakeSourceFrame.path]
             let bytes = files.reduce(UInt64(0)) { sum, file in
                 let path = staging.appendingPathComponent(file).path
                 let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber

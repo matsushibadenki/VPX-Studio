@@ -55,6 +55,12 @@ final class TakeSnapshotTests: XCTestCase {
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: parent) }
         let studio = StudioModel()
+        studio.inputEncoding = .rec709
+        studio.chromaKeyEnabled = true
+        studio.chromaGreenThreshold = 0.22
+        studio.temporalMatteEnabled = true
+        studio.personMatteEnabled = true
+        studio.depthOcclusionEnabled = true
         let deviceID = UUID()
         studio.deviceRegistry.register(.init(id: deviceID, displayName: "Camera A", capabilities: [.video, .pose]), role: .secondaryCamera)
         studio.deviceRegistry.updateState(for: deviceID, to: .connected)
@@ -70,8 +76,25 @@ final class TakeSnapshotTests: XCTestCase {
         XCTAssertEqual(review.manifest.schemaVersion, 2)
         XCTAssertEqual(review.manifest.provenance, request.manifest.provenance)
         XCTAssertEqual(review.manifest.assets.map(\.role), [.diagnostics])
+        XCTAssertEqual(review.recompositionAssets.first { $0.role == .diagnostics }?.status, .verified)
+        XCTAssertEqual(review.recompositionAssets.first { $0.role == .camera }?.status, .missing)
         XCTAssertEqual(try Data(contentsOf: destination.appendingPathComponent("diagnostics.json")), request.diagnostics)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: parent.path), ["Take"])
+        let service = TakeReviewService()
+        let settings = try await service.restoreCompositeSettings(directory: destination, manifest: review.manifest)
+        let restored = StudioModel()
+        XCTAssertTrue(restored.restoreTakeCompositeSettings(settings))
+        XCTAssertEqual(restored.inputEncoding, .rec709)
+        XCTAssertEqual(restored.chromaGreenThreshold, 0.22)
+        XCTAssertTrue(restored.chromaKeyEnabled)
+        XCTAssertTrue(restored.temporalMatteEnabled)
+        XCTAssertTrue(restored.personMatteEnabled)
+        XCTAssertTrue(restored.depthOcclusionEnabled)
+        try Data("modified".utf8).write(to: destination.appendingPathComponent("diagnostics.json"))
+        do {
+            _ = try await service.restoreCompositeSettings(directory: destination, manifest: review.manifest)
+            XCTFail("Modified settings must not be restored")
+        } catch TakeManifest.PlaybackError.modified {}
     }
 
     @MainActor func testDestinationCollisionPreservesExistingFiles() async throws {

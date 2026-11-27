@@ -35,7 +35,7 @@ enum SDRInputEncoding: String, CaseIterable, Codable {
 }
 
 enum CompositeDebugView: String, CaseIterable, Codable { case composite, scene, video, matte, depth, depthConfidence
-    case lensCorrection, colorConversion, pose
+    case lensCorrection, colorConversion, pose, trimap
 }
 enum OutputProtection: String, Codable { case normal, inputLost, trackingLost, poseUnaligned, gpuOverload, unknownColor, unsupportedFormat }
 
@@ -56,6 +56,14 @@ struct RenderConfiguration: Codable {
     var temporalMatteEnabled: Bool?
     var temporalMatteStrength: Float?
     var depthPreviewFarMeters: Float?
+    var personMatteEnabled: Bool?
+    var depthOcclusionEnabled: Bool?
+
+    var canRestoreCompositeSettings: Bool {
+        (0.02...0.45).contains(greenThreshold) &&
+            (0.01...0.45).contains(greenSoftness) &&
+            (temporalMatteStrength.map { (0...0.8).contains($0) } ?? true)
+    }
 }
 
 extension OutputProtection {

@@ -8,18 +8,22 @@ float3 decodeSDR(float3 c, uint transfer) {
     if (transfer == 2) return select(pow((c+0.099)/1.099,float3(1.0/0.45)), c/4.5, c < 0.081);
     return c;
 }
+float2 cameraSampleUV(float2 uv, constant VideoParameters& p) {
+    float2 xy = (uv-p.intrinsics.xy)/p.intrinsics.zw;
+    float r2 = dot(xy,xy);
+    float radial = 1 + p.distortion.x*r2 + p.distortion.y*r2*r2 + p.distortion.z*r2*r2*r2;
+    float p1=p.distortion.w, p2=p.options.x;
+    float2 distorted = xy*radial + float2(2*p1*xy.x*xy.y+p2*(r2+2*xy.x*xy.x), p1*(r2+2*xy.y*xy.y)+2*p2*xy.x*xy.y);
+    return p.intrinsics.xy + distorted*p.intrinsics.zw;
+}
+
 kernel void normalizeCamera(texture2d<float,access::sample> first [[texture(0)]],
     texture2d<float,access::sample> chroma [[texture(1)]], texture2d<float,access::write> output [[texture(2)]],
     constant VideoParameters& p [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
     if (gid.x >= output.get_width() || gid.y >= output.get_height()) return;
     constexpr sampler s(filter::linear,address::clamp_to_edge);
     float2 uv = (float2(gid)+0.5)/float2(output.get_width(),output.get_height());
-    float2 xy = (uv-p.intrinsics.xy)/p.intrinsics.zw;
-    float r2 = dot(xy,xy);
-    float radial = 1 + p.distortion.x*r2 + p.distortion.y*r2*r2 + p.distortion.z*r2*r2*r2;
-    float p1=p.distortion.w, p2=p.options.x;
-    float2 distorted = xy*radial + float2(2*p1*xy.x*xy.y+p2*(r2+2*xy.x*xy.x), p1*(r2+2*xy.y*xy.y)+2*p2*xy.x*xy.y);
-    float2 sampleUV = p.intrinsics.xy + distorted*p.intrinsics.zw;
+    float2 sampleUV = cameraSampleUV(uv, p);
     bool leftHalf = uv.x < 0.5;
     // Lens comparison isolates the geometry while preserving identical color conversion.
     if (p.matrix.w == 1 && leftHalf) sampleUV = uv;
@@ -37,25 +41,163 @@ kernel void normalizeCamera(texture2d<float,access::sample> first [[texture(0)]]
     uint transfer = p.matrix.w == 2 && leftHalf ? 1 : uint(p.options.y);
     output.write(float4(decodeSDR(rgb,transfer), p.options.z*(inBounds ? 1.0 : 0.0)),gid);
 }
+float chromaAlpha(float3 rgb, float4 key) {
+    float dominance = rgb.g - max(rgb.r, rgb.b);
+    return 1.0 - smoothstep(key.y, key.y + max(key.z, 0.001), dominance);
+}
+
+float reliableDepth(uint2 pixel, uint2 imageSize, constant VideoParameters& p,
+    texture2d<float,access::read> depth, texture2d<uint,access::read> confidence, thread bool& lowConfidence) {
+    float2 uv = cameraSampleUV((float2(pixel)+0.5)/float2(imageSize), p);
+    if (!all(isfinite(uv)) || any(uv < 0.0) || any(uv > 1.0)) return 0.0;
+    uint2 size = uint2(depth.get_width(), depth.get_height());
+    uint2 point = min(uint2(uv*float2(size)), size-1);
+    float meters = depth.read(point).r;
+    if (!isfinite(meters) || meters <= 0.0) return 0.0;
+    lowConfidence = confidence.read(point).r != 2;
+    return lowConfidence ? 0.0 : meters;
+}
+
+float reliableDepth(uint2 pixel, uint2 imageSize, constant VideoParameters& p,
+    texture2d<float,access::read> depth, texture2d<uint,access::read> confidence) {
+    bool lowConfidence = false;
+    return reliableDepth(pixel, imageSize, p, depth, confidence, lowConfidence);
+}
+
+int confidentPersonClass(uint2 pixel, uint2 imageSize, constant VideoParameters& p,
+    texture2d<float,access::read> mask) {
+    float2 uv = cameraSampleUV((float2(pixel)+0.5)/float2(imageSize), p);
+    if (!all(isfinite(uv)) || any(uv < 0.0) || any(uv > 1.0)) return -1;
+    uint2 size = uint2(mask.get_width(), mask.get_height());
+    float score = mask.read(min(uint2(uv*float2(size)), size-1)).r;
+    return score >= 0.95 ? 1 : score <= 0.05 ? 0 : -1;
+}
+
+float rgbDistance(float3 a, float3 b) {
+    float3 delta = abs(a-b);
+    return max(delta.r, max(delta.g, delta.b));
+}
+
+// Match a small cross around a fractional edge. Reject border, invalid, and ambiguous patches.
+int2 previousMattePosition(int2 pixel, texture2d<float,access::read> video,
+    texture2d<float,access::read> previousVideo, constant float4& key) {
+    int2 size = int2(video.get_width(), video.get_height());
+    if (any(pixel < 2) || any(pixel >= size-2)) return pixel;
+    constexpr int2 taps[] = {int2(0,0), int2(-1,0), int2(1,0), int2(0,-1), int2(0,1)};
+    float3 current[5];
+    for (uint i = 0; i < 5; ++i) {
+        float4 color = video.read(uint2(pixel+taps[i]));
+        if (color.a <= 0.0) return pixel;
+        current[i] = color.rgb;
+    }
+
+    float best = 1.0, second = 1.0, stationary = 1.0;
+    int2 match = pixel;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            int2 candidate = pixel+int2(x,y);
+            float error = 0.0;
+            for (uint i = 0; i < 5; ++i) {
+                float4 prior = previousVideo.read(uint2(candidate+taps[i]));
+                if (prior.a <= 0.0) { error = 5.0; break; }
+                error += rgbDistance(current[i], prior.rgb);
+            }
+            error *= 0.2;
+            if (x == 0 && y == 0) stationary = error;
+            if (error < best) {
+                second = best;
+                best = error;
+                match = candidate;
+            } else {
+                second = min(second, error);
+            }
+        }
+    }
+    if (best > 0.035 || second-best < 0.012 || stationary-best < 0.015) return pixel;
+    float previousAlpha = chromaAlpha(previousVideo.read(uint2(match)).rgb, key);
+    return previousAlpha > 0.0 && previousAlpha < 1.0 ? match : pixel;
+}
+
 kernel void buildMatte(texture2d<float,access::read> video [[texture(0)]],
     texture2d<float,access::write> matte [[texture(1)]],
     texture2d<float,access::read> previousVideo [[texture(2)]],
     texture2d<float,access::read> previousMatte [[texture(3)]],
-    constant float4& key [[buffer(0)]], constant float4& temporal [[buffer(1)]], uint2 gid [[thread_position_in_grid]]) {
+    texture2d<float,access::write> trimap [[texture(4)]],
+    texture2d<float,access::read> depth [[texture(5)]], texture2d<uint,access::read> confidence [[texture(6)]],
+    texture2d<float,access::read> personMask [[texture(7)]],
+    constant float4& key [[buffer(0)]], constant float4& temporal [[buffer(1)]],
+    constant VideoParameters& videoParams [[buffer(2)]], constant uint& guidance [[buffer(3)]],
+    uint2 gid [[thread_position_in_grid]]) {
     if (gid.x >= matte.get_width() || gid.y >= matte.get_height()) return;
     float4 color=video.read(gid);
-    float dominance=color.g-max(color.r,color.b);
-    float strength=smoothstep(key.y,key.y+max(key.z,0.001),dominance);
-    float alpha=color.a*(1-key.x*strength);
-    if (temporal.w > 1.5) {
+    float base = color.a > 0.0 ? (key.x > 0.5 ? chromaAlpha(color.rgb, key) : 1.0) : 0.0;
+    bool boundary = base > 0.0 && base < 1.0;
+    if (key.w > 0.5) trimap.write(float4(boundary ? 0.5 : base), gid);
+    float alpha = base;
+    if (boundary && temporal.w > 1.5) {
         // Drawing the same captured frame again must not advance the filter.
-        alpha=previousMatte.read(gid).r;
-    } else if (temporal.w > 0.5 && alpha > 0.05 && alpha < 0.95) {
-        float3 difference=abs(color.rgb-previousVideo.read(gid).rgb);
+        alpha = previousMatte.read(gid).r;
+    } else if (boundary) {
+        constexpr int2 offsets[] = {int2(-1,0), int2(1,0), int2(0,-1), int2(0,1)};
+        int2 last = int2(video.get_width(), video.get_height()) - 1;
+        uint2 imageSize = uint2(video.get_width(), video.get_height());
+        // Lens comparison deliberately splits input geometry and bypasses depth guidance.
+        float centerDepth = (guidance & 1) && videoParams.matrix.w != 1
+            ? reliableDepth(gid, imageSize, videoParams, depth, confidence) : 0.0;
+        int person = (guidance & 2) ? confidentPersonClass(gid, imageSize, videoParams, personMask) : -1;
+        float sum = 0.0, total = 0.0, guidedSum = 0.0, guidedTotal = 0.0;
+        bool foundReliableNeighbor = false;
+        for (uint i = 0; i < 4; ++i) {
+            int2 point = int2(gid) + offsets[i];
+            if (any(point < 0) || any(point > last)) continue;
+            float4 neighbor = video.read(uint2(point));
+            float candidate = chromaAlpha(neighbor.rgb, key);
+            if (neighbor.a <= 0.0 || candidate <= 0.0 || candidate >= 1.0) continue;
+            float3 difference = abs(neighbor.rgb - color.rgb);
+            float colorDistance = max(difference.r, max(difference.g, difference.b));
+            float weight = (1.0 - smoothstep(0.03, 0.10, colorDistance))
+                         * (1.0 - smoothstep(0.10, 0.30, abs(candidate - base)));
+            if (person >= 0 && weight > 0.0) {
+                int neighborPerson = confidentPersonClass(uint2(point), imageSize, videoParams, personMask);
+                if (neighborPerson >= 0 && neighborPerson != person) weight = 0.0;
+            }
+            sum += candidate * weight;
+            total += weight;
+            if (centerDepth > 0.0 && weight > 0.0) {
+                float neighborDepth = reliableDepth(uint2(point), imageSize, videoParams, depth, confidence);
+                if (neighborDepth > 0.0) {
+                    foundReliableNeighbor = true;
+                    float tolerance = max(0.03, centerDepth*0.02);
+                    float guidedWeight = weight * (1.0-smoothstep(tolerance, 2.0*tolerance, abs(centerDepth-neighborDepth)));
+                    guidedSum += candidate * guidedWeight;
+                    guidedTotal += guidedWeight;
+                }
+            }
+        }
+        if (foundReliableNeighbor) {
+            sum = guidedSum;
+            total = guidedTotal;
+        }
+        // Keep a dominant contribution from the current pixel, including fine fractional alpha.
+        alpha = mix(base, (base + sum) / (1.0 + total), 0.35);
+    }
+    if (boundary && temporal.w > 0.5 && temporal.w <= 1.5 && alpha > 0.05 && alpha < 0.95) {
+        float4 stationary = previousVideo.read(gid);
+        int2 match = int2(gid);
+        // Preserve the original inexpensive filter for stable pixels.
+        if (stationary.a <= 0.0 || rgbDistance(color.rgb, stationary.rgb) > 0.04) {
+            match = previousMattePosition(int2(gid), video, previousVideo, key);
+        }
+        float4 previous = previousVideo.read(uint2(match));
+        float previousBase = chromaAlpha(previous.rgb, key);
+        float3 difference=abs(color.rgb-previous.rgb);
         float change=max(difference.r,max(difference.g,difference.b));
-        float prior=previousMatte.read(gid).r;
+        float prior=previousMatte.read(uint2(match)).r;
         float confidence=(1-smoothstep(0.04,temporal.y,change))*(1-smoothstep(0.1,temporal.z,abs(alpha-prior)));
-        alpha=mix(alpha,prior,clamp(temporal.x,0.0,0.8)*confidence);
+        if (previous.a > 0.0 && previousBase > 0.0 && previousBase < 1.0 && prior > 0.0 && prior < 1.0) {
+            float motionScale = all(match == int2(gid)) ? 1.0 : 0.65;
+            alpha=mix(alpha,prior,clamp(temporal.x,0.0,0.8)*confidence*motionScale);
+        }
     }
     matte.write(float4(alpha),gid);
 }
@@ -104,9 +246,11 @@ vertex QuadOutput studioQuad(uint id [[vertex_id]]) {
 fragment float4 studioComposite(QuadOutput in [[stage_in]], texture2d<float> scene [[texture(0)]],
     texture2d<float> video [[texture(1)]], texture2d<float> matte [[texture(2)]],
     texture2d<float,access::read> depth [[texture(3)]], texture2d<uint,access::read> confidence [[texture(4)]],
-    texture3d<float> lut [[texture(5)]], constant float4& options [[buffer(0)]],
+    texture3d<float> lut [[texture(5)]], texture2d<float> trimap [[texture(6)]], constant float4& options [[buffer(0)]],
     constant float4& depthParameters [[buffer(1)]], constant float4& lutMin [[buffer(2)]],
-    constant float4& lutMax [[buffer(3)]]) {
+    constant float4& lutMax [[buffer(3)]], depth2d<float> sceneDepth [[texture(7)]],
+    texture2d<float,access::read> liveDepth [[texture(8)]], texture2d<uint,access::read> liveConfidence [[texture(9)]],
+    constant VideoParameters& videoParams [[buffer(4)]], constant float2& projectionDepth [[buffer(5)]], device atomic_uint* occlusionFlags [[buffer(6)]]) {
     constexpr sampler s(filter::linear,address::clamp_to_edge);
     if (options.x == 4 || options.x == 5) {
         if (options.w < 0.5) return float4(0.015,0.015,0.015,1);
@@ -132,11 +276,38 @@ fragment float4 studioComposite(QuadOutput in [[stage_in]], texture2d<float> sce
     if (options.x == 1) return float4(clamp(background,0.0,1.0),1);
     if (options.x == 2) return float4(clamp(foreground,0.0,1.0),1);
     if (options.x == 3) return float4(float3(alpha),1);
+    if (options.x == 9) {
+        constexpr sampler nearest(filter::nearest,address::clamp_to_edge);
+        return float4(float3(trimap.sample(nearest,in.uv).r),1);
+    }
     if (options.x == 6 || options.x == 7) {
         float valid = video.sample(s,in.uv).a;
         return float4(clamp(foreground,0.0,1.0)*valid,1);
     }
     foreground.g=mix(foreground.g,min(foreground.g,max(foreground.r,foreground.b)),(1-alpha)*options.z);
+    if (depthParameters.w > 0.5 && alpha > 0.0) {
+        constexpr sampler nearest(filter::nearest,address::clamp_to_edge);
+        float z = sceneDepth.sample(nearest,in.uv);
+        if (z >= 0.0 && z < 1.0) {
+            // Invert the projection depth to positive axial distance in meters.
+            float cgMeters = projectionDepth.y / (z + projectionDepth.x);
+            uint2 imageSize = uint2(video.get_width(), video.get_height());
+            uint2 pixel = min(uint2(in.uv*float2(imageSize)), imageSize-1);
+            bool lowConfidence = false;
+            float liveMeters = reliableDepth(pixel, imageSize, videoParams, liveDepth, liveConfidence, lowConfidence);
+            // Preserve the keyed composite where the depth order is uncertain.
+            bool applied = liveMeters > 0.0 && isfinite(cgMeters) && cgMeters > 0.0 &&
+                liveMeters-cgMeters > max(0.03, liveMeters*0.02);
+            if (applied) alpha = 0.0;
+            // The recorder crops odd dimensions; ignore pixels outside the saved area.
+            if (depthParameters.w > 1.5 && all(pixel < (imageSize & ~1u))) {
+                uint flag = applied ? 1u : lowConfidence ? 4u : liveMeters <= 0.0 ? 2u : 0u;
+                if (flag && !(atomic_load_explicit(occlusionFlags, memory_order_relaxed) & flag)) {
+                    atomic_fetch_or_explicit(occlusionFlags, flag, memory_order_relaxed);
+                }
+            }
+        }
+    }
     // Linear Rec.709/sRGB primaries; the sRGB render target performs the output transfer once.
     float3 composite = foreground*alpha+background*(1-alpha);
     if (depthParameters.z > 0.5) {

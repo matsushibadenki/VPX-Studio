@@ -3,6 +3,22 @@ import Metal
 import Foundation
 import simd
 
+struct TakeDepthOcclusion: Codable, Equatable, Sendable {
+    enum State: String, Codable, Sendable {
+        case disabled, missingDepth, mismatchedDepth, unavailable, evaluated
+    }
+
+    let state: State
+    var applied = false
+    var missingSamples = false
+    var lowConfidence = false
+}
+
+struct TakeOcclusionReadback: @unchecked Sendable {
+    // The recording command owns the buffer until GPU completion.
+    let buffer: MTLBuffer
+}
+
 struct TakeAuxiliaryFrame: Sendable {
     struct Pose: Codable, Sendable {
         let worldFromCamera: [Float]
@@ -25,10 +41,24 @@ struct TakeAuxiliaryFrame: Sendable {
     let sourceID: UUID?
     let inputSequence: UInt64?
     let inputHostSeconds: Double?
+    var originalVideo: TakeSourceFrame?
     let depth: DepthPreviewInput?
     let pose: Pose?
     var colorConversion: ColorConversion?
     var lut: CompositeLUT.Usage?
+    var depthOcclusion: TakeDepthOcclusion?
+    var depthSameARKitFrame: Bool?
+    var depthOcclusionReadback: TakeOcclusionReadback?
+
+    /// Reads the flags only after Metal has completed the recorded output.
+    mutating func finishDepthOcclusion() {
+        guard let result = depthOcclusionReadback else { return }
+        let flags = result.buffer.contents().load(as: UInt32.self)
+        depthOcclusion?.applied = flags & 1 != 0
+        depthOcclusion?.missingSamples = flags & 2 != 0
+        depthOcclusion?.lowConfidence = flags & 4 != 0
+        depthOcclusionReadback = nil
+    }
 }
 
 struct TakeMatteCopy: @unchecked Sendable {
@@ -69,6 +99,16 @@ final class TakeAuxiliaryTracks {
         let pose: TakeAuxiliaryFrame.Pose?
         var colorConversion: TakeAuxiliaryFrame.ColorConversion?
         var lut: CompositeLUT.Usage?
+        var depthOcclusion: TakeDepthOcclusion?
+        var depthSameARKitFrame: Bool?
+        var originalVideo: TakeSourceFrame.Index?
+
+        var depthOffsetMilliseconds: Double? {
+            guard let depth, let inputHostSeconds, inputHostSeconds.isFinite,
+                  depth.capturedHostSeconds.isFinite else { return nil }
+            let offset = (depth.capturedHostSeconds - inputHostSeconds) * 1_000
+            return offset.isFinite ? offset : nil
+        }
     }
 
     private let directory: URL
@@ -125,10 +165,12 @@ final class TakeAuxiliaryTracks {
                 depth = reference
             }
         }
+        let original = try frame?.originalVideo?.encoded { try write($0, to: TakeSourceFrame.path) }
         let row = Row(frameIndex: index, ptsValue: time.value, ptsTimescale: time.timescale,
             sourceID: frame?.sourceID, inputSequence: frame?.inputSequence, inputHostSeconds: frame?.inputHostSeconds,
             matte: matteRange, matteWidth: matte?.width, matteHeight: matte?.height, depth: depth, pose: frame?.pose,
-            colorConversion: frame?.colorConversion, lut: frame?.lut)
+            colorConversion: frame?.colorConversion, lut: frame?.lut, depthOcclusion: frame?.depthOcclusion,
+            depthSameARKitFrame: depth == nil ? nil : frame?.depthSameARKitFrame, originalVideo: original)
         var line = try encoder.encode(row)
         line.append(0x0A)
         _ = try write(line, to: "frames.jsonl")
@@ -141,7 +183,8 @@ final class TakeAuxiliaryTracks {
         let assets: [TakeManifest.Asset] = [
             .init(role: .pose, relativePath: "frames.jsonl"),
             .init(role: .matte, relativePath: "matte.f16le"),
-            .init(role: .depth, relativePath: "depth.bin")
+            .init(role: .depth, relativePath: "depth.bin"),
+            .init(role: .sourceFrames, relativePath: TakeSourceFrame.path)
         ]
         return assets.filter { paths.contains($0.relativePath) }
     }

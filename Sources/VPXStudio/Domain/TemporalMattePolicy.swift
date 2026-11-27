@@ -11,6 +11,7 @@ struct TemporalMattePolicy {
         let pixelFormat: UInt32
         let normalization: [Float]
         var quality: StreamQuality = .nominal
+        var sourceGeneration: UUID?
     }
     private var previousKey: Key?
     private var previousSequence: UInt64?
@@ -28,7 +29,7 @@ struct TemporalMattePolicy {
         defer { previousKey = key; previousSequence = sequence; previousCaptureTime = time }
         guard previousKey == key, let lastSequence = previousSequence, let lastTime = previousCaptureTime else { return .reset }
         if sequence == lastSequence && time == lastTime { return .reuse }
-        guard sequence > lastSequence, time > lastTime, time-lastTime <= 0.1 else { return .reset }
+        guard sequence > lastSequence, sequence - lastSequence == 1, time > lastTime, time-lastTime <= 0.1 else { return .reset }
         return .blend
     }
 }

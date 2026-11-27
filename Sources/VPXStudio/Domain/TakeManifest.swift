@@ -11,14 +11,21 @@ struct TakeManifest: Codable, Equatable, Sendable {
     var configuration: ProjectConfiguration
     var assets: [Asset]
     var provenance: TakeProvenance?
+    var audioSync: AudioSync?
+
+    struct AudioSync: Codable, Equatable, Sendable {
+        let relativePath: String
+        let offsetMilliseconds: Int
+    }
 
     struct Asset: Codable, Equatable, Sendable {
         enum Role: String, Codable, Sendable {
-            case camera, composite, audio, matte, depth, pose, calibration, scene, color, diagnostics, lut
+            case camera, composite, audio, matte, depth, pose, calibration, scene, color, diagnostics, lut, sourceFrames
         }
         var role: Role
         var relativePath: String
         var sha256: String? = nil
+        var displayName: String?
     }
 
     enum ValidationError: Error, Equatable {
@@ -56,6 +63,13 @@ struct TakeManifest: Codable, Equatable, Sendable {
                 throw ValidationError.duplicatePath(path)
             }
         }
+        if let audioSync {
+            guard (-10_000...10_000).contains(audioSync.offsetMilliseconds),
+                  assets.contains(where: { $0.role == .audio && $0.relativePath == audioSync.relativePath && $0.sha256 != nil }),
+                  assets.contains(where: { $0.role == .composite && $0.relativePath == "composite.mov" && $0.sha256 != nil }) else {
+                throw ValidationError.invalidProvenance
+            }
+        }
         let luts = assets.filter { $0.role == .lut }
         if !luts.isEmpty {
             guard luts.count == 1, let lut = luts.first,
@@ -83,17 +97,17 @@ struct TakeManifest: Codable, Equatable, Sendable {
     enum PlaybackError: Error { case unsupportedRole, unverified, modified }
 
     /// Rehashes the selected sealed asset immediately before handing it to AVKit.
-    func verifiedPlaybackURL(relativePath: String, in directory: URL) throws -> URL {
+    func verifiedPlaybackURL(relativePath: String, in directory: URL, audioOnly: Bool = false) throws -> URL {
         try validate()
         guard let asset = assets.first(where: { $0.relativePath == relativePath }),
-              asset.role == .camera || asset.role == .composite else { throw PlaybackError.unsupportedRole }
+              (audioOnly ? asset.role == .audio : asset.role == .camera || asset.role == .composite) else { throw PlaybackError.unsupportedRole }
         guard let expected = asset.sha256 else { throw PlaybackError.unverified }
         let inspected = try Self.inspectAsset(asset, in: directory)
         guard inspected.digest == expected else { throw PlaybackError.modified }
         return inspected.url
     }
 
-    func verifiedAssetData(relativePath: String, role: Asset.Role, in directory: URL, maximumSize: Int? = nil) throws -> Data {
+    func verifiedAssetData(relativePath: String, role: Asset.Role, in directory: URL, maximumSize: Int? = nil, byteRange: Range<UInt64>? = nil) throws -> Data {
         try validate()
         guard let asset = assets.first(where: { $0.relativePath == relativePath && $0.role == role }) else { throw PlaybackError.unsupportedRole }
         guard let expected = asset.sha256 else { throw PlaybackError.unverified }
@@ -101,15 +115,26 @@ struct TakeManifest: Codable, Equatable, Sendable {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var data = Data()
+        var hasher = SHA256()
+        var offset: UInt64 = 0
         while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
             try Task.checkCancellation()
-            if let maximumSize, chunk.count > maximumSize - data.count {
-                throw ValidationError.unsafeAsset(relativePath)
+            hasher.update(data: chunk)
+            let end = offset + UInt64(chunk.count)
+            let startInChunk = max(offset, byteRange?.lowerBound ?? offset)
+            let endInChunk = min(end, byteRange?.upperBound ?? end)
+            if startInChunk < endInChunk {
+                let slice = Int(startInChunk - offset)..<Int(endInChunk - offset)
+                if let maximumSize, slice.count > maximumSize - data.count {
+                    throw ValidationError.unsafeAsset(relativePath)
+                }
+                data.append(contentsOf: chunk[slice])
             }
-            data.append(chunk)
+            offset = end
         }
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
         guard digest == expected else { throw PlaybackError.modified }
+        if let byteRange, byteRange.upperBound > offset { throw ValidationError.unsafeAsset(relativePath) }
         return data
     }
 
@@ -145,7 +170,7 @@ struct TakeManifest: Codable, Equatable, Sendable {
         }
     }
 
-    private static func digest(of asset: Asset, in directory: URL) throws -> String {
+    static func digest(of asset: Asset, in directory: URL) throws -> String {
         try inspectAsset(asset, in: directory).digest
     }
 

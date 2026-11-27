@@ -110,8 +110,11 @@ final class CompositeCapture {
         let copy = Copy(buffer: buffer, textures: planes)
         command.addCompletedHandler { [slots, copy, matteCopy] completed in
             defer { slots.signal() }
-            if completed.status == .completed { recorder.submitVideo(copy.buffer, at: time, auxiliary: auxiliary, matte: matteCopy) }
-            else { recorder.dropVideoFrame() }
+            if completed.status == .completed {
+                var recorded = auxiliary
+                recorded?.finishDepthOcclusion()
+                recorder.submitVideo(copy.buffer, at: time, auxiliary: recorded, matte: matteCopy)
+            } else { recorder.dropVideoFrame() }
         }
     }
 }

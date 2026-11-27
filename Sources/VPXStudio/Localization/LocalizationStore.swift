@@ -14,6 +14,7 @@ enum LocalizationKey: String {
     case playTakeAsset, takePreparingPlayback, takePlaybackFailed
     case takeLocalInputDrops, takeLocalDiscontinuities, takeLocalUnknownLoss
     case takeClockSamples, takeClockCurrent, takeClockStale, takeClockUnmeasured, takeClockPeak
+    case restoreTakeCompositeSettings
     case takeLUTAsset, restoreTakeLUT
     case loadCompositeLUT, clearCompositeLUT, takeLUTApplied, takeLUTNotApplied
     case takeColorPolicy, takeColorApplied
@@ -31,7 +32,23 @@ enum LocalizationKey: String {
     case calibrationExtrinsicsMissing, checkerboardIntrinsicRMSE, checkerboardViewCount
     case checkerboardIntrinsicsExpired
     case solveCheckerboard, checkerboardHelp, checkerboardSolving, checkerboardInvalid, checkerboardIntrinsicsMismatch, checkerboardDegenerate, checkerboardResidualRejected, checkerboardMaximumResidual, checkerboardMeasured
+    case takeExportSyncedMovie, takeExportSyncedMovieFailed
+    case takePreviewRecomposition, takePreviewRecompositionHelp, takeRecompositionFailed
+    case takeOriginalFrames
+    case takeRecompositionAssets, takeRecompositionAssetsHelp
+    case takeImportAudio, takeSaveAudioSync
+    case takeAuditionAudio, takeOriginalAudio, takeAuditionOffset
+    case takeAudioTiming, takeAudioStartOffset, takeAudioEndOffset, takeAudioOverlap
+    case takeDepthSourceFrame, takeDepthOffset, takeDepthNearbyFrame, takeDepthFrameMatchUnknown
+    case takePreviewAuxiliary, takePreviewAuxiliaryFailed, takeCloseAuxiliary, takeDepthScale
+    case takeOcclusionRateHelp, takeOcclusionJump, takeOcclusionJumpHelp
+    case takeOcclusionDisabled, takeOcclusionMissing, takeOcclusionMismatch, takeOcclusionUnavailable
+    case takeOcclusionApplied, takeOcclusionLowConfidence, takeOcclusionNoChange
+    case depthOcclusion, depthOcclusionHelp
+    case personMatte, personMatteHelp
+    case trimapPass, trimapHelp
     case lensComparisonPass, lensComparisonHelp, colorComparisonPass, colorComparisonHelp
+    case depthSameARKitFrame
     case depthPass, depthConfidencePass, depthPreviewHelp, depthPreviewFar, depthPreviewMissing, depthPreviewAge
     case temporalMatte, temporalMatteHelp, temporalMatteStrength, temporalMatteDisabled, temporalMatteReset, temporalMatteBlend, temporalMatteReuse
     case posePreviewPass, posePreviewUnavailable, posePreviewFrame

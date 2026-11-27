@@ -25,6 +25,16 @@ final class DepthPreviewTests: XCTestCase {
         XCTAssertFalse(frame.isCurrent(sourceID: frame.sourceID,now: .nan))
         XCTAssertFalse(try input(source: source,time: -1).isCurrent(sourceID: source,now: 0))
     }
+    func testARKitDepthRequiresExactSourceSequenceTimeAndFreshness() throws {
+        let source = UUID(), depth = try input(source: source)
+        XCTAssertTrue(depth.matchesARKitFrame(sourceID: source, sequence: 1, captureNanoseconds: 1_000_000, now: 1.1))
+        XCTAssertFalse(depth.matchesARKitFrame(sourceID: UUID(), sequence: 1, captureNanoseconds: 1_000_000, now: 1.1))
+        XCTAssertFalse(depth.matchesARKitFrame(sourceID: source, sequence: 2, captureNanoseconds: 1_000_000, now: 1.1))
+        XCTAssertFalse(depth.matchesARKitFrame(sourceID: source, sequence: 1, captureNanoseconds: 1_000_001, now: 1.1))
+        XCTAssertFalse(depth.matchesARKitFrame(sourceID: source, sequence: 1, captureNanoseconds: nil, now: 1.1))
+        XCTAssertFalse(depth.matchesARKitFrame(sourceID: source, sequence: 1, captureNanoseconds: 1_000_000, now: 2))
+    }
+
     func testUploadsOnceAndNeverOverwritesInFlightTexture() throws {
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("Metal unavailable") }
         let source = UUID(), cache = DepthPreviewTextureCache(device: device)

@@ -188,7 +188,8 @@ final class CaptureNodeHEVCVideoSource: VideoSource {
                 } ?? VideoColorMetadata.read(from: pixelBuffer),
                 pixelBuffer: pixelBuffer,
                 quality: .nominal,
-                telemetry: telemetry, capturedLens: header.cameraMetadata?.lens
+                telemetry: telemetry, capturedLens: header.cameraMetadata?.lens,
+                arKitCaptureNanoseconds: header.cameraMetadata?.source == "arkit" ? header.captureTimeNanoseconds : nil
             )
         )
     }

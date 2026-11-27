@@ -31,7 +31,7 @@ struct ClockSample {
     let uncertaintyMilliseconds: Double
 }
 
-struct VideoColorMetadata: Equatable {
+struct VideoColorMetadata: Codable, Equatable, Sendable {
     let colorPrimaries: String?
     let transferFunction: String?
     let yCbCrMatrix: String?
@@ -65,6 +65,7 @@ struct VideoFrame {
     let quality: StreamQuality
     var telemetry = FrameTelemetry()
     var capturedLens: CaptureLensMetadata?
+    var arKitCaptureNanoseconds: UInt64?
 }
 
 struct PoseSample {

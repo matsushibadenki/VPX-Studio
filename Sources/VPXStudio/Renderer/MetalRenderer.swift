@@ -5,6 +5,7 @@ import os
 /// SwiftUI changes immutable settings; only the render thread owns the frame pipeline.
 final class MetalRenderer: NSObject, MTKViewDelegate {
     private let capture: CompositeCapture
+    private let personMatteWorker: PersonMatteWorker
     private let pipeline: MetalFramePipeline
     private let latestVideoFrame: LatestVideoFrameStore
     private let metrics: RealtimeMetricsStore
@@ -18,6 +19,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         do { pipeline = try MetalFramePipeline(device: device,pixelFormat: pixelFormat) }
         catch { Logger(subsystem: "jp.vpxstudio",category: "renderer").error("Pipeline: \(error.localizedDescription)"); return nil }
         capture = CompositeCapture(device: device)
+        personMatteWorker = PersonMatteWorker(device: device)
         self.latestVideoFrame = latestVideoFrame; self.metrics = metrics
         super.init()
     }
@@ -29,7 +31,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         let captureTime = CMClockGetTime(CMClockGetHostTimeClock())
         let now = CACurrentMediaTime(), snapshot = latestVideoFrame.readSnapshot()
         let frame = snapshot.frame
-        let settings = settingsLock.withLock { storedSettings }
+        var settings = settingsLock.withLock { storedSettings }
+        if settings.personMatteEnabled, settings.chromaEnabled, let frame {
+            settings.personMatte = personMatteWorker.mask(for: frame, source: snapshot.sourceID, now: now)
+        }
         do {
             let recorder = settings.debugView == .composite ? latestVideoFrame.compositeRecorder : nil
             let recordFrame: ((MTLCommandBuffer, MTLTexture, MTLTexture?, MTLFence, TakeAuxiliaryFrame) -> Void)?

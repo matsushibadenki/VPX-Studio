@@ -8,6 +8,9 @@ struct StudioRenderSettings: Sendable {
     var debugView = CompositeDebugView.composite
     var profile = LiveQualityProfile.liveFast
     var chromaEnabled = false
+    var depthOcclusionEnabled = false
+    var personMatteEnabled = false
+    var personMatte: PersonMatteMask?
     var greenThreshold: Float = 0.12
     var greenSoftness: Float = 0.2
     var temporalMatteEnabled = false
@@ -75,10 +78,12 @@ final class MetalFramePipeline {
     private let textureCache: CVMetalTextureCache
     private let fallback: MTLTexture
     private let depthConfidenceFallback: MTLTexture
+    private let inactiveOcclusionFlags: MTLBuffer
     private var sceneTexture: MTLTexture?
     private var sceneDepth: MTLTexture?
     private var videoTexture: MTLTexture?
     private var matteTexture: MTLTexture?
+    private var trimapTexture: MTLTexture?
     private var historyVideoTexture: MTLTexture?
     private var historyMatteTexture: MTLTexture?
     private var matteHistoryPolicy = TemporalMattePolicy()
@@ -125,13 +130,17 @@ final class MetalFramePipeline {
         guard CVMetalTextureCacheCreate(nil,nil,device,nil,&cache) == kCVReturnSuccess, let cache else { throw StudioAssetError.invalid("texture cache") }
         textureCache = cache
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
-        descriptor.storageMode = .shared
+        descriptor.storageMode = .shared; descriptor.usage = [.shaderRead, .shaderWrite]
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw StudioAssetError.invalid("fallback texture") }
         fallback = texture
         let confidenceDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Uint,width: 1,height: 1,mipmapped: false)
         confidenceDescriptor.storageMode = .shared; confidenceDescriptor.usage = [.shaderRead]
         guard let confidenceFallback = device.makeTexture(descriptor: confidenceDescriptor) else { throw StudioAssetError.invalid("depth confidence fallback") }
         depthConfidenceFallback = confidenceFallback
+        guard let flags = device.makeBuffer(length: MemoryLayout<UInt32>.size, options: .storageModeShared) else {
+            throw StudioAssetError.invalid("occlusion flags")
+        }
+        inactiveOcclusionFlags = flags
         var zeroConfidence: UInt8 = 0
         confidenceFallback.replace(region: MTLRegionMake2D(0,0,1,1),mipmapLevel: 0,withBytes: &zeroConfidence,bytesPerRow: 1)
         var zero: UInt32 = 0
@@ -154,7 +163,7 @@ final class MetalFramePipeline {
         guard width > 0, height > 0, width <= 8192, height <= 8192 else { throw StudioAssetError.invalid("render size") }
         if sceneTexture?.width != width || sceneTexture?.height != height {
             let scene = try texture(.rgba16Float, width: width, height: height, usage: [.renderTarget,.shaderRead])
-            let depth = try texture(.depth32Float, width: width, height: height, usage: [.renderTarget])
+            let depth = try texture(.depth32Float, width: width, height: height, usage: [.renderTarget, .shaderRead])
             let video = try texture(.rgba16Float, width: width, height: height, usage: [.shaderRead,.shaderWrite])
             let matte = try texture(.r16Float, width: width, height: height, usage: [.shaderRead,.shaderWrite])
             let shadow = try texture(.depth32Float, width: 1024, height: 1024, usage: [.renderTarget,.shaderRead])
@@ -202,7 +211,7 @@ final class MetalFramePipeline {
     /// Returns an uncommitted final command buffer. The caller may attach a drawable before commit.
     func encode(frame: VideoFrame?, target: MTLTexture, settings inputSettings: StudioRenderSettings,
                 metrics: RealtimeMetricsStore, now: Double, frameSourceID: UUID? = nil,
-                capture10Bit: Bool = false,
+                capture10Bit: Bool = false, savedMatte: MTLTexture? = nil,
                 capture: ((MTLCommandBuffer, MTLTexture, MTLTexture?, MTLFence, TakeAuxiliaryFrame) -> Void)? = nil) throws -> MTLCommandBuffer {
         var resolvedSettings = inputSettings
         let aligned = inputSettings.poseAlignment.flatMap { alignment in
@@ -218,16 +227,29 @@ final class MetalFramePipeline {
         }
         let settings = resolvedSettings
         let debugView = settings.protectMissingInput ? CompositeDebugView.composite : settings.debugView
+        let showTrimap = debugView == .trimap
+        if showTrimap {
+            if trimapTexture?.width != target.width || trimapTexture?.height != target.height {
+                trimapTexture = try texture(.r8Unorm, width: target.width, height: target.height, usage: [.shaderRead, .shaderWrite])
+            }
+        } else {
+            trimapTexture = nil
+        }
+        let trimap = trimapTexture ?? fallback
         let showDepth = debugView == .depth || debugView == .depthConfidence
         let depthTextures: DepthPreviewTextureCache.Textures?
         if showDepth {
             depthTextures = try depthPreviewCache.textures(for: settings.depthPreview,sourceID: frameSourceID,now: now)
-        } else { depthPreviewCache.clear(); depthTextures = nil }
+        } else { depthTextures = nil }
         if showDepth {
             let input = settings.depthPreview.flatMap { $0.sourceID == frameSourceID ? $0 : nil }
             metrics.recordDepthPreview(DepthPreviewTelemetry(available: depthTextures != nil,
                 width: input.map { Int($0.packet.header.width) },height: input.map { Int($0.packet.header.height) },
-                ageMilliseconds: input.flatMap { $0.capturedHostSeconds.isFinite && now.isFinite ? (now-$0.capturedHostSeconds)*1000 : nil }))
+                ageMilliseconds: input.flatMap { $0.capturedHostSeconds.isFinite && now.isFinite ? (now-$0.capturedHostSeconds)*1000 : nil },
+                sameARKitFrame: frame.map { frame in
+                    input?.matchesARKitFrame(sourceID: frameSourceID, sequence: frame.identifier,
+                                             captureNanoseconds: frame.arKitCaptureNanoseconds, now: now) == true
+                }))
         } else { metrics.recordDepthPreview(nil) }
         var alignmentTelemetry = settings.poseAlignment.map { alignment in
             PoseAlignmentTelemetry(mode: aligned.flatMap { .init(rawValue: $0.mode.rawValue) } ?? .unavailable,
@@ -294,15 +316,61 @@ final class MetalFramePipeline {
         // Debug comparisons use the same imported texture and conversion pass.
         if debugView == .lensCorrection { videoParams.matrix.w = 1 }
         if debugView == .colorConversion { videoParams.matrix.w = 2 }
+        let compositeView = debugView == .composite || debugView == .pose
+        let wantsOcclusion = settings.depthOcclusionEnabled && compositeView && aligned != nil &&
+            c.map { calibration in
+                guard let frame else { return false }
+                return calibration.source != .estimated &&
+                    calibration.imageWidth == Float(CVPixelBufferGetWidth(frame.pixelBuffer)) &&
+                    calibration.imageHeight == Float(CVPixelBufferGetHeight(frame.pixelBuffer))
+            } == true
+        let depthMatches: Bool
+        let depthSameARKitFrame: Bool
+        if let frame, let input = settings.depthPreview {
+            depthSameARKitFrame = input.matchesARKitFrame(sourceID: frameSourceID, sequence: frame.identifier,
+                                  captureNanoseconds: frame.arKitCaptureNanoseconds, now: now)
+            depthMatches = depthSameARKitFrame && input.matchesVideoAspect(width: CVPixelBufferGetWidth(frame.pixelBuffer),
+                                    height: CVPixelBufferGetHeight(frame.pixelBuffer))
+        } else {
+            depthSameARKitFrame = false
+            depthMatches = false
+        }
+        let registeredDepth: DepthPreviewTextureCache.Textures?
+        if settings.chromaEnabled || wantsOcclusion, hasVideo, depthMatches, let input = settings.depthPreview {
+            registeredDepth = try? depthPreviewCache.textures(for: input, sourceID: frameSourceID, now: now)
+        } else {
+            registeredDepth = nil
+        }
+        let matteDepth = settings.chromaEnabled ? registeredDepth : nil
+        let occlusionDepth = wantsOcclusion ? registeredDepth : nil
+        let occlusionFlags: MTLBuffer?
+        let occlusionState: TakeDepthOcclusion.State
+        if capture != nil, occlusionDepth != nil {
+            occlusionFlags = device.makeBuffer(length: MemoryLayout<UInt32>.size, options: .storageModeShared)
+            occlusionFlags?.contents().storeBytes(of: UInt32(0), as: UInt32.self)
+            occlusionState = occlusionFlags == nil ? .unavailable : .evaluated
+        } else {
+            occlusionFlags = nil
+            if !settings.depthOcclusionEnabled { occlusionState = .disabled }
+            else if settings.depthPreview == nil { occlusionState = .missingDepth }
+            else if frame != nil && !depthMatches { occlusionState = .mismatchedDepth }
+            else { occlusionState = .unavailable }
+        }
+        if !showDepth && registeredDepth == nil { depthPreviewCache.clear() }
+        let personMatte: PersonMatteMask? = settings.personMatte.flatMap { mask in
+            guard settings.chromaEnabled, settings.personMatteEnabled, hasVideo, let frame,
+                  debugView != .lensCorrection, mask.matches(frame, source: frameSourceID, now: now) else { return nil }
+            return mask
+        }
         let normalization = [videoParams.distortion,videoParams.intrinsics,videoParams.options,videoParams.range,videoParams.matrix]
             .flatMap { [$0.x,$0.y,$0.z,$0.w] } + [settings.greenThreshold,settings.greenSoftness,settings.temporalMatteStrength,
                 Float(frame.map { CVPixelBufferGetWidth($0.pixelBuffer) } ?? 0),Float(frame.map { CVPixelBufferGetHeight($0.pixelBuffer) } ?? 0)]
         let historyKey = frameSourceID.map { TemporalMattePolicy.Key(sourceID: $0,width: target.width,height: target.height,
             pixelFormat: frame.map { CVPixelBufferGetPixelFormatType($0.pixelBuffer) } ?? 0,normalization: normalization,
-            quality: frame?.quality ?? .lost) }
+            quality: frame?.quality ?? .lost, sourceGeneration: frame?.telemetry.sourceGeneration) }
         var nextMattePolicy = matteHistoryPolicy
         let historyMode = nextMattePolicy.next(key: historyKey,sequence: frame?.identifier,captureTime: frame?.telemetry.captured,
-            enabled: wantsMatteHistory && hasVideo)
+            enabled: wantsMatteHistory && hasVideo && matteDepth == nil && personMatte == nil)
         metrics.recordTemporalMatte(historyMode)
         guard let normalizeEncoder = conversion.makeComputeCommandEncoder() else { throw StudioAssetError.invalid("normalize encoder") }
         normalizeEncoder.label = "Normalize + lens undistort + SDR decode"
@@ -329,7 +397,8 @@ final class MetalFramePipeline {
         let near: Float = 0.01, far = sceneRadius*5+5
         let ortho = simd_float4x4(columns: (SIMD4(1/radius,0,0,0),SIMD4(0,1/radius,0,0),SIMD4(0,0,1/(near-far),0),SIMD4(0,0,near/(near-far),1)))
         let cameraWorld = c?.transform ?? settings.camera.worldFromCamera
-        var sceneParams = SceneParameters(viewProjection: settings.camera.projection(aspectRatio: Float(target.width)/Float(target.height))*simd_inverse(cameraWorld),
+        let projection = settings.camera.projection(aspectRatio: Float(target.width)/Float(target.height))
+        var sceneParams = SceneParameters(viewProjection: projection*simd_inverse(cameraWorld),
             lightProjection: ortho*lightView, camera: cameraWorld.columns.3, lightDirection: SIMD4(direction,0),
             radiance: SIMD4(settings.scene.lightColor*settings.scene.lightIntensity,1))
         let lut = settings.compositeLUT
@@ -353,7 +422,7 @@ final class MetalFramePipeline {
                 let d = MTLRenderPassDescriptor()
                 d.colorAttachments[0].texture = sceneTexture; d.colorAttachments[0].loadAction = .clear
                 d.colorAttachments[0].storeAction = .store; d.colorAttachments[0].clearColor = MTLClearColor(red: 0.015,green: 0.02,blue: 0.04,alpha: 1)
-                d.depthAttachment.texture = sceneDepth; d.depthAttachment.loadAction = .clear; d.depthAttachment.storeAction = .dontCare; d.depthAttachment.clearDepth = 1
+                d.depthAttachment.texture = sceneDepth; d.depthAttachment.loadAction = .clear; d.depthAttachment.storeAction = occlusionDepth == nil ? .dontCare : .store; d.depthAttachment.clearDepth = 1
                 guard let e = command.makeRenderCommandEncoder(descriptor: d) else { throw StudioAssetError.invalid("scene encoder") }
                 e.label = "Scene-linear PBR"
                 e.waitForFence(shadowFence,before: .fragment)
@@ -375,7 +444,14 @@ final class MetalFramePipeline {
                 e.setTexture(videoTexture,index: 0); e.setTexture(matteTexture,index: 1)
                 e.setTexture(historyVideoTexture ?? fallback,index: 2)
                 e.setTexture(historyMatteTexture ?? fallback,index: 3)
-                var key = SIMD4<Float>(settings.chromaEnabled ? 1 : 0,settings.greenThreshold,settings.greenSoftness,0)
+                e.setTexture(trimap,index: 4)
+                e.setTexture(matteDepth?.depth ?? fallback, index: 5)
+                e.setTexture(matteDepth?.confidence ?? depthConfidenceFallback, index: 6)
+                e.setTexture(personMatte?.texture ?? fallback, index: 7)
+                var guidance = UInt32((matteDepth == nil ? 0 : 1) | (personMatte == nil ? 0 : 2))
+                e.setBytes(&videoParams, length: MemoryLayout<VideoParameters>.stride, index: 2)
+                e.setBytes(&guidance, length: MemoryLayout<UInt32>.stride, index: 3)
+                var key = SIMD4<Float>(settings.chromaEnabled ? 1 : 0,settings.greenThreshold,settings.greenSoftness,showTrimap ? 1 : 0)
                 e.setBytes(&key,length: MemoryLayout<SIMD4<Float>>.stride,index: 0)
                 var temporal = SIMD4<Float>(settings.temporalMatteStrength,0.08,0.25,
                     historyMode == .reuse ? 2 : historyMode == .blend ? 1 : 0)
@@ -400,21 +476,32 @@ final class MetalFramePipeline {
                     e.label = "Linear composite to SDR output"
                     e.waitForFence(sceneFence,before: .fragment); e.waitForFence(matteFence,before: .fragment)
                     e.setRenderPipelineState(state)
-                    e.setFragmentTexture(sceneTexture,index: 0); e.setFragmentTexture(videoTexture,index: 1); e.setFragmentTexture(matteTexture,index: 2)
+                    e.setFragmentTexture(sceneTexture,index: 0); e.setFragmentTexture(videoTexture,index: 1); e.setFragmentTexture(savedMatte ?? matteTexture,index: 2)
                     e.setFragmentTexture(depthTextures?.depth ?? fallback,index: 3)
                     // Integer textures require a matching integer fallback.
                     e.setFragmentTexture(depthTextures?.confidence ?? depthConfidenceFallback,index: 4)
                     e.setFragmentTexture(lutTexture, index: 5)
+                    e.setFragmentTexture(trimap, index: 6)
+                    e.setFragmentTexture(occlusionDepth == nil ? shadowTexture : sceneDepth, index: 7)
+                    e.setFragmentTexture(occlusionDepth?.depth ?? fallback, index: 8)
+                    e.setFragmentTexture(occlusionDepth?.confidence ?? depthConfidenceFallback, index: 9)
                     let mode = debugView == .pose ? 0 : (CompositeDebugView.allCases.firstIndex(of: debugView) ?? 0)
                     var options = SIMD4<Float>(Float(mode),blockOutput ? 1 : 0,settings.chromaEnabled ? 1 : 0,depthTextures == nil ? 0 : 1)
                     e.setFragmentBytes(&options,length: MemoryLayout<SIMD4<Float>>.stride,index: 0)
+                    let outputFlags = capture10Bit
+                        ? (output === highPrecisionOutput ? occlusionFlags : nil)
+                        : occlusionFlags
+                    e.setFragmentBuffer(outputFlags ?? inactiveOcclusionFlags, offset: 0, index: 6)
                     var depthParameters = SIMD4<Float>(settings.depthPreviewFarMeters.isFinite ? max(0.5,min(20,settings.depthPreviewFarMeters)) : 10,
-                        Float(target.width)/Float(target.height),lut != nil ? 1 : 0,0)
+                        Float(target.width)/Float(target.height),lut != nil ? 1 : 0,occlusionDepth == nil ? 0 : (outputFlags == nil ? 1 : 2))
                     e.setFragmentBytes(&depthParameters,length: MemoryLayout<SIMD4<Float>>.stride,index: 1)
                     var low = SIMD4<Float>(lut?.domainMin ?? .zero, 0)
                     var high = SIMD4<Float>(lut?.domainMax ?? SIMD3(repeating: 1), 0)
                     e.setFragmentBytes(&low, length: MemoryLayout<SIMD4<Float>>.stride, index: 2)
                     e.setFragmentBytes(&high, length: MemoryLayout<SIMD4<Float>>.stride, index: 3)
+                    e.setFragmentBytes(&videoParams, length: MemoryLayout<VideoParameters>.stride, index: 4)
+                    var projectionDepth = SIMD2<Float>(projection[2].z, projection[3].z)
+                    e.setFragmentBytes(&projectionDepth, length: MemoryLayout<SIMD2<Float>>.stride, index: 5)
                     e.drawPrimitives(type: .triangle,vertexStart: 0,vertexCount: 3); e.endEncoding()
                 }
             case "matteHistory":
@@ -445,10 +532,13 @@ final class MetalFramePipeline {
                 return input
             }
             let auxiliary = TakeAuxiliaryFrame(sourceID: frameSourceID, inputSequence: frame?.identifier,
-                inputHostSeconds: inputTime, depth: depth, pose: hasVideo ? aligned.map(TakeAuxiliaryFrame.Pose.init) : nil,
+                inputHostSeconds: inputTime, originalVideo: hasVideo ? frame.map { .init(buffer: $0.pixelBuffer, color: $0.colorMetadata) } : nil,
+                depth: depth, pose: hasVideo ? aligned.map(TakeAuxiliaryFrame.Pose.init) : nil,
                 colorConversion: .init(requested: settings.inputEncoding, applied: hasVideo ? encoding : nil),
                 lut: .init(reference: lut?.reference, applied: lut != nil && !blockOutput &&
-                    (debugView == .composite || debugView == .pose)))
+                    (debugView == .composite || debugView == .pose)),
+                depthOcclusion: .init(state: occlusionState), depthSameARKitFrame: depth == nil ? nil : depthSameARKitFrame,
+                depthOcclusionReadback: occlusionFlags.map { .init(buffer: $0) })
             capture(command, highPrecisionOutput ?? target, hasVideo ? matteTexture : nil, matteFence, auxiliary)
         }
         return command

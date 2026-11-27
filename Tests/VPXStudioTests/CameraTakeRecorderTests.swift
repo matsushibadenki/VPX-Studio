@@ -96,8 +96,10 @@ final class CameraTakeRecorderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: parent) }
         let lutBytes = Data(("LUT_3D_SIZE 2\n" + String(repeating: "0.1 0.2 0.3\n", count: 8)).utf8)
         let sourceLUT = try CompositeLUT.parse(lutBytes, name: "Test.cube")
-        let recorder = try CameraTakeRecorder(request: StudioModel().takeSnapshotRequest(),
-            parent: parent, sourceID: UUID(), composite: true, preserve10Bit: preserve10Bit, compositeLUT: sourceLUT)
+        let studio = StudioModel()
+        let recorder = try CameraTakeRecorder(request: studio.takeSnapshotRequest(),
+            parent: parent, sourceID: UUID(), composite: true, preserve10Bit: preserve10Bit,
+            sceneSnapshot: TakeSceneSnapshot(scene: studio.renderSettings.scene), compositeLUT: sourceLUT)
         let capture = CompositeCapture(device: device)
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: preserve10Bit ? .rgba16Float : .bgra8Unorm_srgb,
             width: 64, height: 64, mipmapped: false)
@@ -128,8 +130,12 @@ final class CameraTakeRecorderTests: XCTestCase {
         let depth = DepthPreviewInput(sourceID: sourceID, packet: packet, capturedHostSeconds: 10)
         let pose = TakeAuxiliaryFrame.Pose(.init(transform: matrix_identity_float4x4, mode: .measured, horizonMilliseconds: 0))
         let lut = CompositeLUT.Usage(reference: sourceLUT.reference, applied: true)
-        let auxiliary = TakeAuxiliaryFrame(sourceID: sourceID, inputSequence: 11, inputHostSeconds: 10, depth: depth, pose: pose,
-            colorConversion: .init(requested: .automatic, applied: .rec709), lut: lut)
+        let originalFormat = preserve10Bit ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_32BGRA
+        let original = try recordingBuffer(originalFormat)
+        let originalColor = VideoColorMetadata(colorPrimaries: "ITU_R_709_2", transferFunction: "ITU_R_709_2", yCbCrMatrix: nil)
+        let auxiliary = TakeAuxiliaryFrame(sourceID: sourceID, inputSequence: 11, inputHostSeconds: 9.95,
+            originalVideo: .init(buffer: original, color: originalColor), depth: depth, pose: pose,
+            colorConversion: .init(requested: .automatic, applied: .rec709), lut: lut, depthOcclusion: .init(state: .missingDepth), depthSameARKitFrame: false)
         capture.encode(texture, on: command, to: recorder, at: hostTime, auxiliary: auxiliary, matte: mask)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             command.addCompletedHandler { _ in continuation.resume() }
@@ -147,6 +153,28 @@ final class CameraTakeRecorderTests: XCTestCase {
         let audio = try await asset.loadTracks(withMediaType: .audio)
         XCTAssertEqual(video.count, 1)
         XCTAssertEqual(audio.count, 1)
+        let audioTiming = try await TakeAudioTiming.inspect(asset)
+        XCTAssertNotNil(audioTiming)
+        let audition = try await TakeAudioAudition.build(video: asset, audio: asset, offsetMilliseconds: 0)
+        let auditionTiming = try await TakeAudioTiming.inspect(audition.composition)
+        XCTAssertNotNil(auditionTiming)
+        XCTAssertEqual(audition.timing.startOffsetMilliseconds, 0, accuracy: 1)
+        let exported = parent.appendingPathComponent("synchronized.mov")
+        try await TakeAudioAudition.export(composition: audition.composition, to: exported)
+        let exportedAsset = AVURLAsset(url: exported)
+        let exportedVideo = try await exportedAsset.loadTracks(withMediaType: .video)
+        let exportedAudio = try await exportedAsset.loadTracks(withMediaType: .audio)
+        XCTAssertEqual(exportedVideo.count, 1)
+        XCTAssertEqual(exportedAudio.count, 1)
+        let sourceFormats = try await video[0].load(.formatDescriptions)
+        let exportedFormats = try await exportedVideo[0].load(.formatDescriptions)
+        XCTAssertEqual(sourceFormats.map { CMFormatDescriptionGetMediaSubType($0) },
+                       exportedFormats.map { CMFormatDescriptionGetMediaSubType($0) })
+        do {
+            try await TakeAudioAudition.export(composition: audition.composition, to: exported)
+            XCTFail("Export must not replace an existing movie")
+        } catch TakeAudioAudition.Failure.invalidDestination {}
+
         let stats = try JSONDecoder().decode(CameraTakeRecorder.Statistics.self,
             from: Data(contentsOf: directory.appendingPathComponent("recording.json")))
         XCTAssertEqual(stats.encodedBitDepth, preserve10Bit ? 10 : nil)
@@ -165,11 +193,22 @@ final class CameraTakeRecorderTests: XCTestCase {
         XCTAssertEqual(summary.colorConversion, .init(requested: [.automatic], applied: [.rec709]))
         XCTAssertTrue(Set(review.manifest.assets.map(\.relativePath)).isSuperset(of: ["matte.f16le", "depth.bin", "frames.jsonl"]))
         let frameRows = try await TakeReviewService().loadFrameIndex(directory: directory, manifest: review.manifest)
+        let restored = try await TakeReviewService().recompositionFrame(directory: directory, manifest: review.manifest, frameIndex: 0)
+        let paired = try XCTUnwrap(restored)
+        XCTAssertEqual(paired.row.inputSequence, 11)
+        XCTAssertEqual(paired.row.depth?.sequence, 7)
+        XCTAssertNotNil(paired.row.matte)
+        XCTAssertNotNil(paired.row.pose)
+        XCTAssertEqual(CVPixelBufferGetPixelFormatType(paired.source.buffer), originalFormat)
+        XCTAssertEqual(paired.source.color, originalColor)
         XCTAssertEqual(frameRows.map(\.frameIndex), [0])
         XCTAssertEqual(frameRows.first?.inputSequence, 11)
         XCTAssertEqual(frameRows.first?.colorConversion?.requested, .automatic)
         XCTAssertEqual(frameRows.first?.colorConversion?.applied, .rec709)
         XCTAssertEqual(frameRows.first?.lut, lut)
+        XCTAssertEqual(frameRows.first?.depthOcclusion?.state, .missingDepth)
+        XCTAssertEqual(frameRows.first?.depthSameARKitFrame, false)
+        XCTAssertEqual(try XCTUnwrap(frameRows.first?.depthOffsetMilliseconds), 50, accuracy: 0.001)
         let lutPath = CompositeLUT.takeAssetPath
         XCTAssertEqual(review.manifest.assets.first { $0.role == .lut }?.sha256, sourceLUT.reference.sha256)
         let service = TakeReviewService()
@@ -179,6 +218,9 @@ final class CameraTakeRecorderTests: XCTestCase {
         let model = StudioModel()
         XCTAssertTrue(model.restoreTakeLUT(restoredLUT))
         XCTAssertEqual(model.renderSettings.compositeLUT?.reference, sourceLUT.reference)
+        let recomposed = try await service.recomposePreview(directory: directory, manifest: review.manifest, startingAt: 0)
+        XCTAssertEqual(recomposed.frames.map(\.seconds), [0])
+        XCTAssertEqual(recomposed.frames.first?.image.width, 64)
         try Data("altered LUT".utf8).write(to: directory.appendingPathComponent(lutPath))
         do {
             _ = try await service.restoreLUT(directory: directory, manifest: review.manifest, relativePath: lutPath)
@@ -193,11 +235,32 @@ final class CameraTakeRecorderTests: XCTestCase {
         XCTAssertEqual(row.depth?.sequence, 7)
         XCTAssertEqual(row.depth?.confidence.offset, 4)
         XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("depth.bin")), depthBytes + Data([2]))
+        let depthPreview = try await service.previewDepth(directory: directory, manifest: review.manifest, row: row)
+        XCTAssertEqual(depthPreview.depth.width, 1)
+        XCTAssertEqual(depthPreview.depth.height, 1)
+        let confidencePixels = try XCTUnwrap(depthPreview.confidence.dataProvider?.data)
+        XCTAssertEqual(confidencePixels as Data, Data([0, 255, 0, 255]))
+        let depthPixels = try XCTUnwrap(depthPreview.depth.dataProvider?.data)
+        XCTAssertEqual(depthPixels as Data, Data([230, 89, 26, 255]))
+        try Data([0]).write(to: directory.appendingPathComponent("depth.bin"))
+        do {
+            _ = try await service.previewDepth(directory: directory, manifest: review.manifest, row: row)
+            XCTFail("Depth modified after inspection must not be displayed")
+        } catch TakeManifest.PlaybackError.modified {}
         let matteFile = directory.appendingPathComponent("matte.f16le")
         let matte = try Data(contentsOf: matteFile)
         XCTAssertEqual(row.matte?.length, 64 * 64 * 2)
         XCTAssertEqual(matte, Data(Array(repeating: [UInt8(0), 0x38], count: 64 * 64).joined()))
+        let preview = try await service.previewMatte(directory: directory, manifest: review.manifest, row: row)
+        XCTAssertEqual(preview.width, 64)
+        XCTAssertEqual(preview.height, 64)
+        let previewBytes = try XCTUnwrap(preview.dataProvider?.data)
+        XCTAssertTrue((previewBytes as Data).allSatisfy { $0 == 128 })
         try Data([0]).write(to: matteFile)
+        do {
+            _ = try await service.previewMatte(directory: directory, manifest: review.manifest, row: row)
+            XCTFail("A matte modified after inspection must not be displayed")
+        } catch TakeManifest.PlaybackError.modified {}
         let modified = try await TakeReviewService().inspect(directory: directory)
         XCTAssertEqual(modified.results.first { $0.relativePath == "matte.f16le" }?.status, .modified)
     }

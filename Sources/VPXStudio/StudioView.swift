@@ -308,6 +308,7 @@ struct StudioView: View {
                 Text(localization.text(.scenePass)).tag(CompositeDebugView.scene)
                 Text(localization.text(.videoPass)).tag(CompositeDebugView.video)
                 Text(localization.text(.mattePass)).tag(CompositeDebugView.matte)
+                Text(localization.text(.trimapPass)).tag(CompositeDebugView.trimap)
                 Text(localization.text(.depthPass)).tag(CompositeDebugView.depth)
                 Text(localization.text(.depthConfidencePass)).tag(CompositeDebugView.depthConfidence)
                 Text(localization.text(.lensComparisonPass)).tag(CompositeDebugView.lensCorrection)
@@ -318,6 +319,10 @@ struct StudioView: View {
             .accessibilityLabel(localization.text(.debugPass))
             .help(localization.text(.debugPass))
             .disabled(isProduction)
+            if studio.debugView == .trimap {
+                let help = localization.text(.trimapHelp)
+                Image(systemName: "info.circle").help(help).accessibilityLabel(help)
+            }
             if studio.debugView == .lensCorrection || studio.debugView == .colorConversion {
                 let help = localization.text(studio.debugView == .lensCorrection ? .lensComparisonHelp : .colorComparisonHelp)
                 Image(systemName: "info.circle").help(help).accessibilityLabel(help)
@@ -329,6 +334,10 @@ struct StudioView: View {
                         .accessibilityLabel(localization.text(.depthPreviewHelp))
                     if let depth = studio.depthPreviewTelemetry, depth.available {
                         Text("\(depth.width ?? 0) × \(depth.height ?? 0)").font(.caption.monospacedDigit())
+                        if depth.sameARKitFrame == true {
+                            Image(systemName: "link").help(localization.text(.depthSameARKitFrame))
+                                .accessibilityLabel(localization.text(.depthSameARKitFrame))
+                        }
                     } else {
                         Text(localization.text(.depthPreviewMissing)).font(.caption).foregroundStyle(.secondary)
                     }
@@ -472,6 +481,17 @@ struct StudioView: View {
                 Image(systemName: "info.circle")
                     .help(localization.text(.temporalMatteHelp))
                     .accessibilityLabel(localization.text(.temporalMatteHelp))
+            }
+            HStack {
+                Toggle(localization.text(.personMatte), isOn: $studio.personMatteEnabled)
+                    .disabled(!studio.chromaKeyEnabled || isProduction)
+                let help = localization.text(.personMatteHelp)
+                Image(systemName: "info.circle").help(help).accessibilityLabel(help)
+            }
+            HStack {
+                Toggle(localization.text(.depthOcclusion), isOn: $studio.depthOcclusionEnabled).disabled(isProduction)
+                let help = localization.text(.depthOcclusionHelp)
+                Image(systemName: "info.circle").help(help).accessibilityLabel(help)
             }
             if studio.temporalMatteEnabled {
                 chromaControl(localization.text(.temporalMatteStrength), value: $studio.temporalMatteStrength, range: 0...0.8)

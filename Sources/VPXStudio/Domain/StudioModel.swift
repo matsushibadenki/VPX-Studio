@@ -187,6 +187,8 @@ final class StudioModel {
     var chromaKeyEnabled = false
     var chromaGreenThreshold: Float = 0.12
     var chromaGreenSoftness: Float = 0.20
+    var depthOcclusionEnabled = false
+    var personMatteEnabled = false
     var temporalMatteEnabled = false
     var temporalMatteStrength: Float = 0.5
     var temporalMatteMode: TemporalMattePolicy.Mode?
@@ -218,6 +220,21 @@ final class StudioModel {
     func restoreTakeLUT(_ lut: CompositeLUT) -> Bool {
         guard canRestoreTakeScene, !isLoadingCompositeLUT else { return false }
         compositeLUT = lut
+        return true
+    }
+
+    @discardableResult
+    func restoreTakeCompositeSettings(_ settings: RenderConfiguration) -> Bool {
+        guard canRestoreTakeScene, settings.canRestoreCompositeSettings else { return false }
+        inputEncoding = settings.inputEncoding
+        chromaKeyEnabled = settings.chromaEnabled
+        chromaGreenThreshold = settings.greenThreshold
+        chromaGreenSoftness = settings.greenSoftness
+        temporalMatteEnabled = settings.temporalMatteEnabled ?? false
+        temporalMatteStrength = settings.temporalMatteStrength ?? 0.5
+        personMatteEnabled = settings.personMatteEnabled ?? false
+        depthOcclusionEnabled = settings.depthOcclusionEnabled ?? false
+        debugView = .composite
         return true
     }
 
@@ -319,6 +336,8 @@ final class StudioModel {
             }
         }
         settings.profile = qualityProfile; settings.inputEncoding = inputEncoding; settings.debugView = debugView
+        settings.depthOcclusionEnabled = depthOcclusionEnabled
+        settings.personMatteEnabled = personMatteEnabled
         settings.chromaEnabled = chromaKeyEnabled; settings.greenThreshold = chromaGreenThreshold; settings.greenSoftness = chromaGreenSoftness
         settings.temporalMatteEnabled = temporalMatteEnabled; settings.temporalMatteStrength = temporalMatteStrength
         settings.depthPreviewFarMeters = depthPreviewFarMeters
@@ -1030,7 +1049,8 @@ final class StudioModel {
                 focusDistanceMeters: focusDistanceMeters,
                 chromaEnabled: chromaKeyEnabled,greenThreshold: chromaGreenThreshold,greenSoftness: chromaGreenSoftness,
                 temporalMatteEnabled: temporalMatteEnabled,temporalMatteStrength: temporalMatteStrength,
-                depthPreviewFarMeters: depthPreviewFarMeters),
+                depthPreviewFarMeters: depthPreviewFarMeters, personMatteEnabled: personMatteEnabled,
+                depthOcclusionEnabled: depthOcclusionEnabled),
             calibrationProfile: calibrationProfile, calibrationIssue: calibrationIssue,
             nodeMonitoring: monitoringSnapshots(now: now),
             admissionLimits: admissionLimits, admissionEvents: admissionEvents
